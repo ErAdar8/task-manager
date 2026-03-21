@@ -1,0 +1,2393 @@
+{
+  "version": "2.0.0",
+  "generated": "2025-02-20",
+  "total_contracts": 67,
+  "categories": {
+    "security": 8,
+    "tokens": 6,
+    "math": 3,
+    "gas": 3,
+    "defi": 12,
+    "bridge": 3,
+    "upgrades": 5,
+    "advanced": 6,
+    "exploits": 8,
+    "rust_anchor": 7,
+    "rust_substrate": 6
+  },
+  "contracts": [
+    {
+      "id": "01",
+      "number": 1,
+      "filename": "01-reentrancy-safe.sol",
+      "name": "Reentrancy Safe",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "reentrancy",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "checks-effects-interactions",
+        "state update before external call"
+      ],
+      "keywords": [
+        "reentrancy",
+        "withdraw",
+        "balance"
+      ],
+      "what_to_check": [
+        "State updated before .call",
+        "No re-entry before effects"
+      ],
+      "tags": [
+        "fundamental",
+        "required",
+        "checks-effects-interactions"
+      ],
+      "file_path": "public/baselines/solidity/security/01-reentrancy-safe.sol"
+    },
+    {
+      "id": "02",
+      "number": 2,
+      "filename": "02-reentrancy-vulnerable.sol",
+      "name": "Reentrancy Vulnerable",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "reentrancy",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "reentrancy",
+      "impact": "Drain all contract funds",
+      "key_patterns": [
+        "external call before state update"
+      ],
+      "keywords": [
+        "reentrancy",
+        "withdraw",
+        "call"
+      ],
+      "what_to_check": [
+        "Order of call vs balance update",
+        "receive() re-entry"
+      ],
+      "tags": [
+        "vulnerable",
+        "educational",
+        "reentrancy"
+      ],
+      "file_path": "public/baselines/solidity/security/02-reentrancy-vulnerable.sol",
+      "severity_hint": "Critical",
+      "historical_exploit": "The DAO (2016)",
+      "attack_steps": [
+        "Call withdraw",
+        "Re-enter from receive() before balance update",
+        "Repeat until drained"
+      ]
+    },
+    {
+      "id": "03",
+      "number": 3,
+      "filename": "03-access-control-ownable.sol",
+      "name": "Access Control Ownable",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "access-control",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "onlyOwner modifier",
+        "owner check"
+      ],
+      "keywords": [
+        "access-control",
+        "ownable",
+        "owner"
+      ],
+      "what_to_check": [
+        "Sensitive functions restricted",
+        "Owner transfer handled"
+      ],
+      "tags": [
+        "access-control",
+        "ownable"
+      ],
+      "file_path": "public/baselines/solidity/security/03-access-control-ownable.sol"
+    },
+    {
+      "id": "04",
+      "number": 4,
+      "filename": "04-access-control-missing.sol",
+      "name": "Access Control Missing",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "access-control",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "missing access control",
+      "impact": "Anyone can call admin functions",
+      "key_patterns": [
+        "no modifier on sensitive functions"
+      ],
+      "keywords": [
+        "access-control",
+        "missing",
+        "admin"
+      ],
+      "what_to_check": [
+        "No onlyOwner or role check on critical functions"
+      ],
+      "tags": [
+        "vulnerable",
+        "access-control"
+      ],
+      "file_path": "public/baselines/solidity/security/04-access-control-missing.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "05",
+      "number": 5,
+      "filename": "05-external-call-safe.sol",
+      "name": "External Call Safe",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "external-calls",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "pull over push",
+        "safe transfer pattern"
+      ],
+      "keywords": [
+        "external-call",
+        "transfer",
+        "withdraw"
+      ],
+      "what_to_check": [
+        "No push to arbitrary address",
+        "User pulls funds"
+      ],
+      "tags": [
+        "external-call",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/security/05-external-call-safe.sol"
+    },
+    {
+      "id": "06",
+      "number": 6,
+      "filename": "06-pausable-pattern.sol",
+      "name": "Pausable Pattern",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "emergency",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "whenNotPaused",
+        "pause/unpause"
+      ],
+      "keywords": [
+        "pausable",
+        "emergency",
+        "pause"
+      ],
+      "what_to_check": [
+        "Critical actions gated by whenNotPaused"
+      ],
+      "tags": [
+        "pausable",
+        "emergency"
+      ],
+      "file_path": "public/baselines/solidity/security/06-pausable-pattern.sol"
+    },
+    {
+      "id": "07",
+      "number": 7,
+      "filename": "07-pull-payment-safe.sol",
+      "name": "Pull Payment Safe",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "payments",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "pull payment",
+        "withdraw pattern"
+      ],
+      "keywords": [
+        "pull-payment",
+        "withdraw",
+        "escrow"
+      ],
+      "what_to_check": [
+        "Payees withdraw; no push to untrusted"
+      ],
+      "tags": [
+        "pull-payment",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/security/07-pull-payment-safe.sol"
+    },
+    {
+      "id": "08",
+      "number": 8,
+      "filename": "08-multisig-wallet.sol",
+      "name": "Multisig Wallet",
+      "lang": "solidity",
+      "category": "security",
+      "subcategory": "multisig",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "threshold signatures",
+        "propose/confirm/execute"
+      ],
+      "keywords": [
+        "multisig",
+        "threshold",
+        "confirmations"
+      ],
+      "what_to_check": [
+        "Threshold and replay of confirmations"
+      ],
+      "tags": [
+        "multisig",
+        "wallet"
+      ],
+      "file_path": "public/baselines/solidity/security/08-multisig-wallet.sol"
+    },
+    {
+      "id": "09",
+      "number": 9,
+      "filename": "09-erc20-safe.sol",
+      "name": "ERC20 Safe",
+      "lang": "solidity",
+      "category": "tokens",
+      "subcategory": "erc20",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "safe transfer",
+        "return value check"
+      ],
+      "keywords": [
+        "erc20",
+        "transfer",
+        "safe"
+      ],
+      "what_to_check": [
+        "transfer returns checked",
+        "no unchecked transfer"
+      ],
+      "tags": [
+        "erc20",
+        "tokens",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/tokens/09-erc20-safe.sol"
+    },
+    {
+      "id": "10",
+      "number": 10,
+      "filename": "10-erc20-unsafe-approval.sol",
+      "name": "ERC20 Unsafe Approval",
+      "lang": "solidity",
+      "category": "tokens",
+      "subcategory": "erc20",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "3",
+      "bug_type": "approval race",
+      "impact": "Approve front-run or infinite approval abuse",
+      "key_patterns": [
+        "approve without reset",
+        "infinite approval"
+      ],
+      "keywords": [
+        "erc20",
+        "approve",
+        "allowance"
+      ],
+      "what_to_check": [
+        "approve(0) before change",
+        "approval amount"
+      ],
+      "tags": [
+        "vulnerable",
+        "erc20",
+        "approval"
+      ],
+      "file_path": "public/baselines/solidity/tokens/10-erc20-unsafe-approval.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "11",
+      "number": 11,
+      "filename": "11-erc721-safe.sol",
+      "name": "ERC721 Safe",
+      "lang": "solidity",
+      "category": "tokens",
+      "subcategory": "erc721",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "safeTransferFrom",
+        "receiver check"
+      ],
+      "keywords": [
+        "erc721",
+        "nft",
+        "safe"
+      ],
+      "what_to_check": [
+        "safeTransferFrom for NFTs",
+        "callback handling"
+      ],
+      "tags": [
+        "erc721",
+        "nft",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/tokens/11-erc721-safe.sol"
+    },
+    {
+      "id": "12",
+      "number": 12,
+      "filename": "12-erc20-mintable-safe.sol",
+      "name": "ERC20 Mintable Safe",
+      "lang": "solidity",
+      "category": "tokens",
+      "subcategory": "erc20",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "access-controlled mint",
+        "cap if applicable"
+      ],
+      "keywords": [
+        "erc20",
+        "mint",
+        "mintable"
+      ],
+      "what_to_check": [
+        "Only minter can mint",
+        "supply cap"
+      ],
+      "tags": [
+        "erc20",
+        "mintable",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/tokens/12-erc20-mintable-safe.sol"
+    },
+    {
+      "id": "13",
+      "number": 13,
+      "filename": "13-erc20-fee-on-transfer.sol",
+      "name": "ERC20 Fee On Transfer",
+      "lang": "solidity",
+      "category": "tokens",
+      "subcategory": "erc20",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "balance check after transfer",
+        "fee-aware accounting"
+      ],
+      "keywords": [
+        "erc20",
+        "fee",
+        "transfer"
+      ],
+      "what_to_check": [
+        "Use balance delta not amount",
+        "fee-on-transfer handling"
+      ],
+      "tags": [
+        "erc20",
+        "fee-on-transfer"
+      ],
+      "file_path": "public/baselines/solidity/tokens/13-erc20-fee-on-transfer.sol"
+    },
+    {
+      "id": "14",
+      "number": 14,
+      "filename": "14-erc20-unchecked-transfer.sol",
+      "name": "ERC20 Unchecked Transfer",
+      "lang": "solidity",
+      "category": "tokens",
+      "subcategory": "erc20",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "4",
+      "bug_type": "unchecked return value",
+      "impact": "False success on failed transfer",
+      "key_patterns": [
+        "transfer without return check"
+      ],
+      "keywords": [
+        "erc20",
+        "transfer",
+        "return value"
+      ],
+      "what_to_check": [
+        "Check return value of transfer",
+        "use SafeERC20"
+      ],
+      "tags": [
+        "vulnerable",
+        "erc20",
+        "transfer"
+      ],
+      "file_path": "public/baselines/solidity/tokens/14-erc20-unchecked-transfer.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "15",
+      "number": 15,
+      "filename": "15-safe-math-08.sol",
+      "name": "Safe Math 0.8",
+      "lang": "solidity",
+      "category": "math",
+      "subcategory": "arithmetic",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "Solidity 0.8+ built-in overflow check"
+      ],
+      "keywords": [
+        "math",
+        "overflow",
+        "solidity 0.8"
+      ],
+      "what_to_check": [
+        "No unchecked blocks for user input"
+      ],
+      "tags": [
+        "math",
+        "safe",
+        "overflow"
+      ],
+      "file_path": "public/baselines/solidity/math/15-safe-math-08.sol"
+    },
+    {
+      "id": "16",
+      "number": 16,
+      "filename": "16-unsafe-math-07.sol",
+      "name": "Unsafe Math 0.7",
+      "lang": "solidity",
+      "category": "math",
+      "subcategory": "arithmetic",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "integer overflow",
+      "impact": "Overflow/underflow bypass logic",
+      "key_patterns": [
+        "no overflow check",
+        "pre-0.8 arithmetic"
+      ],
+      "keywords": [
+        "math",
+        "overflow",
+        "unsafe"
+      ],
+      "what_to_check": [
+        "SafeMath or Solidity 0.8",
+        "unchecked blocks"
+      ],
+      "tags": [
+        "vulnerable",
+        "math",
+        "overflow"
+      ],
+      "file_path": "public/baselines/solidity/math/16-unsafe-math-07.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "17",
+      "number": 17,
+      "filename": "17-unchecked-block.sol",
+      "name": "Unchecked Block",
+      "lang": "solidity",
+      "category": "math",
+      "subcategory": "arithmetic",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "4",
+      "bug_type": "unchecked arithmetic",
+      "impact": "Overflow when used on untrusted input",
+      "key_patterns": [
+        "unchecked { } with user input"
+      ],
+      "keywords": [
+        "unchecked",
+        "overflow",
+        "gas"
+      ],
+      "what_to_check": [
+        "unchecked only on trusted values",
+        "loop counters"
+      ],
+      "tags": [
+        "unchecked",
+        "math",
+        "vulnerable"
+      ],
+      "file_path": "public/baselines/solidity/math/17-unchecked-block.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "18",
+      "number": 18,
+      "filename": "18-dos-unbounded-loop.sol",
+      "name": "DoS Unbounded Loop",
+      "lang": "solidity",
+      "category": "gas",
+      "subcategory": "dos",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "4",
+      "bug_type": "unbounded loop",
+      "impact": "DoS or gas limit block",
+      "key_patterns": [
+        "loop over dynamic array",
+        "no bound"
+      ],
+      "keywords": [
+        "dos",
+        "loop",
+        "gas"
+      ],
+      "what_to_check": [
+        "Bound iterations",
+        "paginate or cap"
+      ],
+      "tags": [
+        "vulnerable",
+        "dos",
+        "gas"
+      ],
+      "file_path": "public/baselines/solidity/gas/18-dos-unbounded-loop.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "19",
+      "number": 19,
+      "filename": "19-efficient-storage.sol",
+      "name": "Efficient Storage",
+      "lang": "solidity",
+      "category": "gas",
+      "subcategory": "optimization",
+      "tier": "core",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "packed storage",
+        "storage layout"
+      ],
+      "keywords": [
+        "gas",
+        "storage",
+        "packing"
+      ],
+      "what_to_check": [
+        "Storage slots packed",
+        "minimal SLOAD/SSTORE"
+      ],
+      "tags": [
+        "gas",
+        "storage",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/gas/19-efficient-storage.sol"
+    },
+    {
+      "id": "20",
+      "number": 20,
+      "filename": "20-revert-griefing.sol",
+      "name": "Revert Griefing",
+      "lang": "solidity",
+      "category": "gas",
+      "subcategory": "dos",
+      "tier": "core",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "3",
+      "bug_type": "revert griefing",
+      "impact": "One user can block batch operations",
+      "key_patterns": [
+        "batch loop reverts on first failure"
+      ],
+      "keywords": [
+        "revert",
+        "griefing",
+        "batch"
+      ],
+      "what_to_check": [
+        "Pull over push",
+        "isolate failing item"
+      ],
+      "tags": [
+        "vulnerable",
+        "griefing",
+        "dos"
+      ],
+      "file_path": "public/baselines/solidity/gas/20-revert-griefing.sol",
+      "severity_hint": "Medium"
+    },
+    {
+      "id": "21",
+      "number": 21,
+      "filename": "21-staking-basic.sol",
+      "name": "Staking Basic",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "staking",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "stake/unstake",
+        "reward accounting"
+      ],
+      "keywords": [
+        "staking",
+        "rewards",
+        "defi"
+      ],
+      "what_to_check": [
+        "Reward math",
+        "reentrancy on stake/unstake"
+      ],
+      "tags": [
+        "defi",
+        "staking"
+      ],
+      "file_path": "public/baselines/solidity/defi/21-staking-basic.sol"
+    },
+    {
+      "id": "22",
+      "number": 22,
+      "filename": "22-liquidity-pool-amm.sol",
+      "name": "Liquidity Pool AMM",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "amm",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "constant product",
+        "add/remove liquidity"
+      ],
+      "keywords": [
+        "amm",
+        "liquidity",
+        "swap"
+      ],
+      "what_to_check": [
+        "K invariant",
+        "slippage",
+        "reentrancy"
+      ],
+      "tags": [
+        "defi",
+        "amm",
+        "liquidity"
+      ],
+      "file_path": "public/baselines/solidity/defi/22-liquidity-pool-amm.sol"
+    },
+    {
+      "id": "23",
+      "number": 23,
+      "filename": "23-vault-erc4626.sol",
+      "name": "Vault ERC4626",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "vault",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "ERC4626",
+        "shares vs assets",
+        "rounding"
+      ],
+      "keywords": [
+        "vault",
+        "erc4626",
+        "shares"
+      ],
+      "what_to_check": [
+        "Share rounding down",
+        "inflation resistance"
+      ],
+      "tags": [
+        "defi",
+        "vault",
+        "erc4626"
+      ],
+      "file_path": "public/baselines/solidity/defi/23-vault-erc4626.sol"
+    },
+    {
+      "id": "24",
+      "number": 24,
+      "filename": "24-flashloan-safe.sol",
+      "name": "Flashloan Safe",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "flashloan",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "callback validation",
+        "repay in same tx"
+      ],
+      "keywords": [
+        "flashloan",
+        "callback",
+        "defi"
+      ],
+      "what_to_check": [
+        "Only pool can call callback",
+        "repay enforced"
+      ],
+      "tags": [
+        "defi",
+        "flashloan",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/defi/24-flashloan-safe.sol"
+    },
+    {
+      "id": "25",
+      "number": 25,
+      "filename": "25-yield-farming.sol",
+      "name": "Yield Farming",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "yield",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "reward per share",
+        "accrual"
+      ],
+      "keywords": [
+        "yield",
+        "farming",
+        "rewards"
+      ],
+      "what_to_check": [
+        "Reward math",
+        "timestamp manipulation"
+      ],
+      "tags": [
+        "defi",
+        "yield"
+      ],
+      "file_path": "public/baselines/solidity/defi/25-yield-farming.sol"
+    },
+    {
+      "id": "26",
+      "number": 26,
+      "filename": "26-governance-voting.sol",
+      "name": "Governance Voting",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "governance",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "vote weight",
+        "quorum",
+        "timelock"
+      ],
+      "keywords": [
+        "governance",
+        "voting",
+        "proposal"
+      ],
+      "what_to_check": [
+        "Double vote",
+        "quorum bypass",
+        "timelock"
+      ],
+      "tags": [
+        "defi",
+        "governance"
+      ],
+      "file_path": "public/baselines/solidity/defi/26-governance-voting.sol"
+    },
+    {
+      "id": "27",
+      "number": 27,
+      "filename": "27-timelock-controller.sol",
+      "name": "Timelock Controller",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "governance",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "delay",
+        "schedule/execute"
+      ],
+      "keywords": [
+        "timelock",
+        "delay",
+        "governance"
+      ],
+      "what_to_check": [
+        "Min delay enforced",
+        "cancel semantics"
+      ],
+      "tags": [
+        "defi",
+        "timelock"
+      ],
+      "file_path": "public/baselines/solidity/defi/27-timelock-controller.sol"
+    },
+    {
+      "id": "28",
+      "number": 28,
+      "filename": "28-oracle-price-feed.sol",
+      "name": "Oracle Price Feed",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "oracle",
+      "tier": "defi",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "stale check",
+        "bounds",
+        "multi-source"
+      ],
+      "keywords": [
+        "oracle",
+        "price",
+        "feed"
+      ],
+      "what_to_check": [
+        "Staleness",
+        "manipulation window"
+      ],
+      "tags": [
+        "defi",
+        "oracle"
+      ],
+      "file_path": "public/baselines/solidity/defi/28-oracle-price-feed.sol"
+    },
+    {
+      "id": "29",
+      "number": 29,
+      "filename": "29-proxy-transparent.sol",
+      "name": "Proxy Transparent",
+      "lang": "solidity",
+      "category": "upgrades",
+      "subcategory": "proxy",
+      "tier": "upgrades",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "admin vs implementation",
+        "delegatecall"
+      ],
+      "keywords": [
+        "proxy",
+        "transparent",
+        "upgrade"
+      ],
+      "what_to_check": [
+        "Admin separation",
+        "storage layout"
+      ],
+      "tags": [
+        "upgrades",
+        "proxy",
+        "transparent"
+      ],
+      "file_path": "public/baselines/solidity/upgrades/29-proxy-transparent.sol"
+    },
+    {
+      "id": "30",
+      "number": 30,
+      "filename": "30-proxy-uups.sol",
+      "name": "Proxy UUPS",
+      "lang": "solidity",
+      "category": "upgrades",
+      "subcategory": "proxy",
+      "tier": "upgrades",
+      "label": "safe",
+      "safe_score": 100,
+      "source": "OpenZeppelin",
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "upgrade in implementation",
+        "UUPS pattern"
+      ],
+      "keywords": [
+        "uups",
+        "proxy",
+        "upgrade"
+      ],
+      "what_to_check": [
+        "Upgrade authorization",
+        "initializer"
+      ],
+      "tags": [
+        "upgrades",
+        "proxy",
+        "uups"
+      ],
+      "file_path": "public/baselines/solidity/upgrades/30-proxy-uups.sol"
+    },
+    {
+      "id": "31",
+      "number": 31,
+      "filename": "31-beacon-proxy.sol",
+      "name": "Beacon Proxy",
+      "lang": "solidity",
+      "category": "upgrades",
+      "subcategory": "proxy",
+      "tier": "upgrades",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "beacon",
+        "implementation pointer"
+      ],
+      "keywords": [
+        "beacon",
+        "proxy",
+        "upgrade"
+      ],
+      "what_to_check": [
+        "Beacon upgrade path",
+        "storage"
+      ],
+      "tags": [
+        "upgrades",
+        "beacon"
+      ],
+      "file_path": "public/baselines/solidity/upgrades/31-beacon-proxy.sol"
+    },
+    {
+      "id": "32",
+      "number": 32,
+      "filename": "32-initializer-pattern.sol",
+      "name": "Initializer Pattern",
+      "lang": "solidity",
+      "category": "upgrades",
+      "subcategory": "initializer",
+      "tier": "upgrades",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "initializer modifier",
+        "no constructor"
+      ],
+      "keywords": [
+        "initializer",
+        "proxy",
+        "constructor"
+      ],
+      "what_to_check": [
+        "Re-initialization prevented",
+        "initializer once"
+      ],
+      "tags": [
+        "upgrades",
+        "initializer"
+      ],
+      "file_path": "public/baselines/solidity/upgrades/32-initializer-pattern.sol"
+    },
+    {
+      "id": "33",
+      "number": 33,
+      "filename": "33-storage-collision-bug.sol",
+      "name": "Storage Collision Bug",
+      "lang": "solidity",
+      "category": "upgrades",
+      "subcategory": "storage",
+      "tier": "upgrades",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "storage collision",
+      "impact": "Storage corruption on upgrade",
+      "key_patterns": [
+        "inheritance storage layout",
+        "collision"
+      ],
+      "keywords": [
+        "storage",
+        "collision",
+        "upgrade"
+      ],
+      "what_to_check": [
+        "Storage layout",
+        "inheritance order"
+      ],
+      "tags": [
+        "vulnerable",
+        "upgrades",
+        "storage"
+      ],
+      "file_path": "public/baselines/solidity/upgrades/33-storage-collision-bug.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "34",
+      "number": 34,
+      "filename": "34-signature-verification.sol",
+      "name": "Signature Verification",
+      "lang": "solidity",
+      "category": "advanced",
+      "subcategory": "signatures",
+      "tier": "advanced",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "ecrecover",
+        "nonce",
+        "replay"
+      ],
+      "keywords": [
+        "signature",
+        "ecrecover",
+        "replay"
+      ],
+      "what_to_check": [
+        "Replay protection",
+        "signature malleability"
+      ],
+      "tags": [
+        "advanced",
+        "signature"
+      ],
+      "file_path": "public/baselines/solidity/advanced/34-signature-verification.sol"
+    },
+    {
+      "id": "35",
+      "number": 35,
+      "filename": "35-eip712-permit.sol",
+      "name": "EIP712 Permit",
+      "lang": "solidity",
+      "category": "advanced",
+      "subcategory": "signatures",
+      "tier": "advanced",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "EIP-712",
+        "permit",
+        "domain separator"
+      ],
+      "keywords": [
+        "eip712",
+        "permit",
+        "gasless"
+      ],
+      "what_to_check": [
+        "Domain separator",
+        "deadline",
+        "replay"
+      ],
+      "tags": [
+        "advanced",
+        "eip712",
+        "permit"
+      ],
+      "file_path": "public/baselines/solidity/advanced/35-eip712-permit.sol"
+    },
+    {
+      "id": "36",
+      "number": 36,
+      "filename": "36-merkle-proof-whitelist.sol",
+      "name": "Merkle Proof Whitelist",
+      "lang": "solidity",
+      "category": "advanced",
+      "subcategory": "merkle",
+      "tier": "advanced",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "MerkleProof",
+        "whitelist",
+        "verify"
+      ],
+      "keywords": [
+        "merkle",
+        "whitelist",
+        "proof"
+      ],
+      "what_to_check": [
+        "Proof verification",
+        "double claim"
+      ],
+      "tags": [
+        "advanced",
+        "merkle",
+        "whitelist"
+      ],
+      "file_path": "public/baselines/solidity/advanced/36-merkle-proof-whitelist.sol"
+    },
+    {
+      "id": "37",
+      "number": 37,
+      "filename": "37-commit-reveal-scheme.sol",
+      "name": "Commit Reveal Scheme",
+      "lang": "solidity",
+      "category": "advanced",
+      "subcategory": "commit-reveal",
+      "tier": "advanced",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "commit hash",
+        "reveal",
+        "two-phase"
+      ],
+      "keywords": [
+        "commit",
+        "reveal",
+        "privacy"
+      ],
+      "what_to_check": [
+        "Binding commit",
+        "reveal window"
+      ],
+      "tags": [
+        "advanced",
+        "commit-reveal"
+      ],
+      "file_path": "public/baselines/solidity/advanced/37-commit-reveal-scheme.sol"
+    },
+    {
+      "id": "38",
+      "number": 38,
+      "filename": "38-slippage-protection.sol",
+      "name": "Slippage Protection",
+      "lang": "solidity",
+      "category": "advanced",
+      "subcategory": "slippage",
+      "tier": "advanced",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "minOut",
+        "deadline",
+        "slippage"
+      ],
+      "keywords": [
+        "slippage",
+        "minOut",
+        "swap"
+      ],
+      "what_to_check": [
+        "minOut enforced",
+        "deadline"
+      ],
+      "tags": [
+        "advanced",
+        "slippage"
+      ],
+      "file_path": "public/baselines/solidity/advanced/38-slippage-protection.sol"
+    },
+    {
+      "id": "39",
+      "number": 39,
+      "filename": "39-meta-transaction.sol",
+      "name": "Meta Transaction",
+      "lang": "solidity",
+      "category": "advanced",
+      "subcategory": "meta-tx",
+      "tier": "advanced",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "relayer",
+        "signature",
+        "nonce"
+      ],
+      "keywords": [
+        "meta-tx",
+        "relayer",
+        "gasless"
+      ],
+      "what_to_check": [
+        "Replay",
+        "signer verification"
+      ],
+      "tags": [
+        "advanced",
+        "meta-tx"
+      ],
+      "file_path": "public/baselines/solidity/advanced/39-meta-transaction.sol"
+    },
+    {
+      "id": "40",
+      "number": 40,
+      "filename": "40-dao-hack-reentrancy.sol",
+      "name": "DAO Hack Reentrancy",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "reentrancy",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "reentrancy",
+      "impact": "Drain all funds",
+      "key_patterns": [
+        "call before state update"
+      ],
+      "keywords": [
+        "dao",
+        "reentrancy",
+        "hack"
+      ],
+      "what_to_check": [
+        "Order of operations",
+        "receive re-entry"
+      ],
+      "tags": [
+        "exploit",
+        "reentrancy",
+        "historical"
+      ],
+      "file_path": "public/baselines/solidity/exploits/40-dao-hack-reentrancy.sol",
+      "severity_hint": "Critical",
+      "historical_exploit": "The DAO 2016",
+      "attack_steps": [
+        "Withdraw",
+        "Re-enter before balance update",
+        "Drain"
+      ]
+    },
+    {
+      "id": "41",
+      "number": 41,
+      "filename": "41-integer-overflow-attack.sol",
+      "name": "Integer Overflow Attack",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "arithmetic",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "integer overflow",
+      "impact": "Bypass checks, mint/drain",
+      "key_patterns": [
+        "unchecked arithmetic"
+      ],
+      "keywords": [
+        "overflow",
+        "underflow",
+        "attack"
+      ],
+      "what_to_check": [
+        "SafeMath or 0.8",
+        "unchecked blocks"
+      ],
+      "tags": [
+        "exploit",
+        "overflow"
+      ],
+      "file_path": "public/baselines/solidity/exploits/41-integer-overflow-attack.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "42",
+      "number": 42,
+      "filename": "42-delegatecall-exploit.sol",
+      "name": "Delegatecall Exploit",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "delegatecall",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "delegatecall to untrusted",
+      "impact": "Storage takeover",
+      "key_patterns": [
+        "delegatecall to user input"
+      ],
+      "keywords": [
+        "delegatecall",
+        "storage",
+        "exploit"
+      ],
+      "what_to_check": [
+        "Delegatecall target",
+        "storage layout"
+      ],
+      "tags": [
+        "exploit",
+        "delegatecall"
+      ],
+      "file_path": "public/baselines/solidity/exploits/42-delegatecall-exploit.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "43",
+      "number": 43,
+      "filename": "43-tx-origin-phishing.sol",
+      "name": "Tx Origin Phishing",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "phishing",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "4",
+      "bug_type": "tx.origin auth",
+      "impact": "Phishing via intermediate contract",
+      "key_patterns": [
+        "tx.origin == msg.sender"
+      ],
+      "keywords": [
+        "tx.origin",
+        "phishing",
+        "auth"
+      ],
+      "what_to_check": [
+        "Use msg.sender not tx.origin"
+      ],
+      "tags": [
+        "exploit",
+        "phishing",
+        "tx.origin"
+      ],
+      "file_path": "public/baselines/solidity/exploits/43-tx-origin-phishing.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "44",
+      "number": 44,
+      "filename": "44-timestamp-manipulation.sol",
+      "name": "Timestamp Manipulation",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "timestamp",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "3",
+      "bug_type": "block.timestamp dependency",
+      "impact": "Miner manipulation",
+      "key_patterns": [
+        "block.timestamp for randomness or critical logic"
+      ],
+      "keywords": [
+        "timestamp",
+        "manipulation",
+        "block"
+      ],
+      "what_to_check": [
+        "Don't use timestamp for randomness",
+        "tolerance"
+      ],
+      "tags": [
+        "exploit",
+        "timestamp"
+      ],
+      "file_path": "public/baselines/solidity/exploits/44-timestamp-manipulation.sol",
+      "severity_hint": "Medium"
+    },
+    {
+      "id": "45",
+      "number": 45,
+      "filename": "45-selfdestruct-force-ether.sol",
+      "name": "Selfdestruct Force Ether",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "selfdestruct",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "4",
+      "bug_type": "assumption balance == 0",
+      "impact": "Force ether breaks assumptions",
+      "key_patterns": [
+        "assume contract balance is 0"
+      ],
+      "keywords": [
+        "selfdestruct",
+        "force",
+        "ether"
+      ],
+      "what_to_check": [
+        "Don't assume balance",
+        "pull over push"
+      ],
+      "tags": [
+        "exploit",
+        "selfdestruct"
+      ],
+      "file_path": "public/baselines/solidity/exploits/45-selfdestruct-force-ether.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "46",
+      "number": 46,
+      "filename": "46-approval-race-condition.sol",
+      "name": "Approval Race Condition",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "approval",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "3",
+      "bug_type": "approval front-run",
+      "impact": "Spend more than intended",
+      "key_patterns": [
+        "approve without zero first"
+      ],
+      "keywords": [
+        "approval",
+        "race",
+        "erc20"
+      ],
+      "what_to_check": [
+        "approve(0) then approve(new)",
+        "infinite approval"
+      ],
+      "tags": [
+        "exploit",
+        "approval",
+        "race-condition"
+      ],
+      "file_path": "public/baselines/solidity/exploits/46-approval-race-condition.sol",
+      "severity_hint": "Medium"
+    },
+    {
+      "id": "47",
+      "number": 47,
+      "filename": "47-front-running-vulnerable.sol",
+      "name": "Front Running Vulnerable",
+      "lang": "solidity",
+      "category": "exploits",
+      "subcategory": "frontrun",
+      "tier": "exploits",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "3",
+      "bug_type": "front-running",
+      "impact": "MEV extraction",
+      "key_patterns": [
+        "visible tx",
+        "no slippage"
+      ],
+      "keywords": [
+        "front-run",
+        "mev",
+        "sandwich"
+      ],
+      "what_to_check": [
+        "Slippage",
+        "private mempool",
+        "commit-reveal"
+      ],
+      "tags": [
+        "exploit",
+        "front-running",
+        "mev"
+      ],
+      "file_path": "public/baselines/solidity/exploits/47-front-running-vulnerable.sol",
+      "severity_hint": "Medium"
+    },
+    {
+      "id": "48",
+      "number": 48,
+      "filename": "48-authority-check-safe.rs",
+      "name": "Authority Check Safe",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "access-control",
+      "tier": "rust_anchor",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "has_one = authority",
+        "Signer check"
+      ],
+      "keywords": [
+        "anchor",
+        "authority",
+        "signer"
+      ],
+      "what_to_check": [
+        "has_one authority",
+        "Signer constraint"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "safe"
+      ],
+      "file_path": "public/baselines/rust/anchor/48-authority-check-safe.rs"
+    },
+    {
+      "id": "49",
+      "number": 49,
+      "filename": "49-pda-validation.rs",
+      "name": "PDA Validation",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "pda",
+      "tier": "rust_anchor",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "seeds",
+        "PDA derivation"
+      ],
+      "keywords": [
+        "pda",
+        "seeds",
+        "anchor"
+      ],
+      "what_to_check": [
+        "Correct seeds",
+        "bump",
+        "owner"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "pda"
+      ],
+      "file_path": "public/baselines/rust/anchor/49-pda-validation.rs"
+    },
+    {
+      "id": "50",
+      "number": 50,
+      "filename": "50-cpi-reentrancy-safe.rs",
+      "name": "CPI Reentrancy Safe",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "cpi",
+      "tier": "rust_anchor",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "state update before CPI",
+        "reentrancy guard"
+      ],
+      "keywords": [
+        "cpi",
+        "reentrancy",
+        "anchor"
+      ],
+      "what_to_check": [
+        "State before CPI",
+        "callback handling"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "cpi",
+        "safe"
+      ],
+      "file_path": "public/baselines/rust/anchor/50-cpi-reentrancy-safe.rs"
+    },
+    {
+      "id": "51",
+      "number": 51,
+      "filename": "51-unsigned-math-safe.rs",
+      "name": "Unsigned Math Safe",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "math",
+      "tier": "rust_anchor",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "checked add/sub",
+        "overflow check"
+      ],
+      "keywords": [
+        "math",
+        "overflow",
+        "anchor"
+      ],
+      "what_to_check": [
+        "checked_* or saturating_*",
+        "no raw + -"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "math",
+        "safe"
+      ],
+      "file_path": "public/baselines/rust/anchor/51-unsigned-math-safe.rs"
+    },
+    {
+      "id": "52",
+      "number": 52,
+      "filename": "52-unsigned-math-vulnerable.rs",
+      "name": "Unsigned Math Vulnerable",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "math",
+      "tier": "rust_anchor",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "integer overflow",
+      "impact": "Overflow in balance/amount",
+      "key_patterns": [
+        "unchecked arithmetic",
+        "raw +="
+      ],
+      "keywords": [
+        "math",
+        "overflow",
+        "vulnerable"
+      ],
+      "what_to_check": [
+        "checked_* usage",
+        "user input in arithmetic"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "vulnerable",
+        "math"
+      ],
+      "file_path": "public/baselines/rust/anchor/52-unsigned-math-vulnerable.rs",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "53",
+      "number": 53,
+      "filename": "53-missing-signer-check.rs",
+      "name": "Missing Signer Check",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "access-control",
+      "tier": "rust_anchor",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "missing signer",
+      "impact": "Anyone can act as user",
+      "key_patterns": [
+        "no Signer constraint"
+      ],
+      "keywords": [
+        "signer",
+        "authority",
+        "anchor"
+      ],
+      "what_to_check": [
+        "Signer<'info>",
+        "has_one",
+        "constraint"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "vulnerable",
+        "signer"
+      ],
+      "file_path": "public/baselines/rust/anchor/53-missing-signer-check.rs",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "54",
+      "number": 54,
+      "filename": "54-account-validation.rs",
+      "name": "Account Validation",
+      "lang": "rust",
+      "category": "rust_anchor",
+      "subcategory": "validation",
+      "tier": "rust_anchor",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "account constraints",
+        "validation"
+      ],
+      "keywords": [
+        "account",
+        "validation",
+        "anchor"
+      ],
+      "what_to_check": [
+        "Account type",
+        "owner",
+        "constraints"
+      ],
+      "tags": [
+        "rust",
+        "anchor",
+        "validation"
+      ],
+      "file_path": "public/baselines/rust/anchor/54-account-validation.rs"
+    },
+    {
+      "id": "55",
+      "number": 55,
+      "filename": "55-pallet-basic.rs",
+      "name": "Pallet Basic",
+      "lang": "rust",
+      "category": "rust_substrate",
+      "subcategory": "pallet",
+      "tier": "rust_substrate",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "dispatchable",
+        "storage",
+        "events"
+      ],
+      "keywords": [
+        "substrate",
+        "pallet",
+        "runtime"
+      ],
+      "what_to_check": [
+        "Origin",
+        "storage",
+        "weight"
+      ],
+      "tags": [
+        "rust",
+        "substrate",
+        "pallet"
+      ],
+      "file_path": "public/baselines/rust/substrate/55-pallet-basic.rs"
+    },
+    {
+      "id": "56",
+      "number": 56,
+      "filename": "56-weight-calculation.rs",
+      "name": "Weight Calculation",
+      "lang": "rust",
+      "category": "rust_substrate",
+      "subcategory": "weight",
+      "tier": "rust_substrate",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "weight",
+        "benchmark",
+        "ref_time"
+      ],
+      "keywords": [
+        "weight",
+        "substrate",
+        "benchmark"
+      ],
+      "what_to_check": [
+        "Correct weight",
+        "DoS via heavy ops"
+      ],
+      "tags": [
+        "rust",
+        "substrate",
+        "weight"
+      ],
+      "file_path": "public/baselines/rust/substrate/56-weight-calculation.rs"
+    },
+    {
+      "id": "57",
+      "number": 57,
+      "filename": "57-runtime-upgrade-safe.rs",
+      "name": "Runtime Upgrade Safe",
+      "lang": "rust",
+      "category": "rust_substrate",
+      "subcategory": "upgrade",
+      "tier": "rust_substrate",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "storage migration",
+        "version"
+      ],
+      "keywords": [
+        "upgrade",
+        "runtime",
+        "substrate"
+      ],
+      "what_to_check": [
+        "Migration",
+        "storage layout"
+      ],
+      "tags": [
+        "rust",
+        "substrate",
+        "upgrade"
+      ],
+      "file_path": "public/baselines/rust/substrate/57-runtime-upgrade-safe.rs"
+    },
+    {
+      "id": "58",
+      "number": 58,
+      "filename": "58-storage-migration.rs",
+      "name": "Storage Migration",
+      "lang": "rust",
+      "category": "rust_substrate",
+      "subcategory": "migration",
+      "tier": "rust_substrate",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "on_runtime_upgrade",
+        "migrate"
+      ],
+      "keywords": [
+        "migration",
+        "storage",
+        "substrate"
+      ],
+      "what_to_check": [
+        "Idempotency",
+        "data integrity"
+      ],
+      "tags": [
+        "rust",
+        "substrate",
+        "migration"
+      ],
+      "file_path": "public/baselines/rust/substrate/58-storage-migration.rs"
+    },
+    {
+      "id": "59",
+      "number": 59,
+      "filename": "59-origin-verification.rs",
+      "name": "Origin Verification",
+      "lang": "rust",
+      "category": "rust_substrate",
+      "subcategory": "origin",
+      "tier": "rust_substrate",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "ensure_signed",
+        "ensure_root",
+        "origin"
+      ],
+      "keywords": [
+        "origin",
+        "signed",
+        "substrate"
+      ],
+      "what_to_check": [
+        "Origin check",
+        "privileged vs signed"
+      ],
+      "tags": [
+        "rust",
+        "substrate",
+        "origin"
+      ],
+      "file_path": "public/baselines/rust/substrate/59-origin-verification.rs"
+    },
+    {
+      "id": "60",
+      "number": 60,
+      "filename": "60-balance-transfer-safe.rs",
+      "name": "Balance Transfer Safe",
+      "lang": "rust",
+      "category": "rust_substrate",
+      "subcategory": "balance",
+      "tier": "rust_substrate",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "transfer",
+        "balance check",
+        "existential"
+      ],
+      "keywords": [
+        "balance",
+        "transfer",
+        "substrate"
+      ],
+      "what_to_check": [
+        "Overflow",
+        "existential deposit",
+        "reentrancy"
+      ],
+      "tags": [
+        "rust",
+        "substrate",
+        "balance"
+      ],
+      "file_path": "public/baselines/rust/substrate/60-balance-transfer-safe.rs"
+    },
+    {
+      "id": "61",
+      "number": 61,
+      "filename": "61-vault-inflation-attack.sol",
+      "name": "Vault Inflation Attack",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "vault",
+      "tier": "defi",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "inflation attack",
+      "impact": "Steal vault shares/deposits",
+      "key_patterns": [
+        "first depositor",
+        "low share supply"
+      ],
+      "keywords": [
+        "vault",
+        "inflation",
+        "shares"
+      ],
+      "what_to_check": [
+        "Virtual shares/offset",
+        "min initial mint"
+      ],
+      "tags": [
+        "defi",
+        "vault",
+        "vulnerable",
+        "inflation"
+      ],
+      "file_path": "public/baselines/solidity/defi/61-vault-inflation-attack.sol",
+      "severity_hint": "Critical",
+      "attack_steps": [
+        "Deposit 1 wei, receive 1 share",
+        "Donate large amount directly to vault",
+        "Share price inflates; next depositor loses to rounding"
+      ]
+    },
+    {
+      "id": "62",
+      "number": 62,
+      "filename": "62-vault-donation-attack.sol",
+      "name": "Vault Donation Attack",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "vault",
+      "tier": "defi",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "donation attack",
+      "impact": "Inflate share value",
+      "key_patterns": [
+        "direct transfer to vault",
+        "share pricing"
+      ],
+      "keywords": [
+        "vault",
+        "donation",
+        "attack"
+      ],
+      "what_to_check": [
+        "Share calculation",
+        "donation resistance"
+      ],
+      "tags": [
+        "defi",
+        "vault",
+        "vulnerable"
+      ],
+      "file_path": "public/baselines/solidity/defi/62-vault-donation-attack.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "63",
+      "number": 63,
+      "filename": "63-vault-share-manipulation.sol",
+      "name": "Vault Share Manipulation",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "vault",
+      "tier": "defi",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "5",
+      "bug_type": "share manipulation",
+      "impact": "Drain or unfair pricing",
+      "key_patterns": [
+        "share/asset ratio",
+        "rounding"
+      ],
+      "keywords": [
+        "vault",
+        "shares",
+        "manipulation"
+      ],
+      "what_to_check": [
+        "Rounding direction",
+        "virtual offset"
+      ],
+      "tags": [
+        "defi",
+        "vault",
+        "vulnerable"
+      ],
+      "file_path": "public/baselines/solidity/defi/63-vault-share-manipulation.sol",
+      "severity_hint": "Critical"
+    },
+    {
+      "id": "64",
+      "number": 64,
+      "filename": "64-vault-rounding-exploit.sol",
+      "name": "Vault Rounding Exploit",
+      "lang": "solidity",
+      "category": "defi",
+      "subcategory": "vault",
+      "tier": "defi",
+      "label": "vulnerable",
+      "safe_score": 0,
+      "source": null,
+      "immunefi_level": "4",
+      "bug_type": "rounding down",
+      "impact": "Dust accumulation or theft",
+      "key_patterns": [
+        "rounding in share math"
+      ],
+      "keywords": [
+        "vault",
+        "rounding",
+        "exploit"
+      ],
+      "what_to_check": [
+        "Round down for user",
+        "up for protocol"
+      ],
+      "tags": [
+        "defi",
+        "vault",
+        "vulnerable",
+        "rounding"
+      ],
+      "file_path": "public/baselines/solidity/defi/64-vault-rounding-exploit.sol",
+      "severity_hint": "High"
+    },
+    {
+      "id": "65",
+      "number": 65,
+      "filename": "65-message-verification.sol",
+      "name": "Message Verification",
+      "lang": "solidity",
+      "category": "bridge",
+      "subcategory": "verification",
+      "tier": "bridge",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "cross-chain proof",
+        "signature/relayer"
+      ],
+      "keywords": [
+        "bridge",
+        "message",
+        "verification"
+      ],
+      "what_to_check": [
+        "Proof validity",
+        "replay",
+        "source chain"
+      ],
+      "tags": [
+        "bridge",
+        "message",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/bridge/65-message-verification.sol"
+    },
+    {
+      "id": "66",
+      "number": 66,
+      "filename": "66-replay-protection.sol",
+      "name": "Replay Protection",
+      "lang": "solidity",
+      "category": "bridge",
+      "subcategory": "replay",
+      "tier": "bridge",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "nonce",
+        "chain id",
+        "replay"
+      ],
+      "keywords": [
+        "bridge",
+        "replay",
+        "nonce"
+      ],
+      "what_to_check": [
+        "Cross-chain replay",
+        "nonce per chain"
+      ],
+      "tags": [
+        "bridge",
+        "replay",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/bridge/66-replay-protection.sol"
+    },
+    {
+      "id": "67",
+      "number": 67,
+      "filename": "67-domain-separation.sol",
+      "name": "Domain Separation",
+      "lang": "solidity",
+      "category": "bridge",
+      "subcategory": "domain",
+      "tier": "bridge",
+      "label": "safe",
+      "safe_score": 100,
+      "source": null,
+      "immunefi_level": null,
+      "bug_type": null,
+      "impact": null,
+      "key_patterns": [
+        "domain separator",
+        "chain id",
+        "EIP-712"
+      ],
+      "keywords": [
+        "bridge",
+        "domain",
+        "separator"
+      ],
+      "what_to_check": [
+        "Domain per chain",
+        "message type"
+      ],
+      "tags": [
+        "bridge",
+        "domain",
+        "safe"
+      ],
+      "file_path": "public/baselines/solidity/bridge/67-domain-separation.sol"
+    }
+  ]
+}

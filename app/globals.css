@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark theme only - high contrast */
+:root {
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --border: #334155;
+  --ring: #3b82f6;
+  --primary: #3b82f6;
+  --primary-foreground: #f1f5f9;
+  --card: #0f172a;
+  --card-foreground: #f1f5f9;
+  --destructive: #dc2626;
+  --destructive-foreground: #f1f5f9;
+  --secondary: #1e293b;
+  --secondary-foreground: #f1f5f9;
+  --accent: #1e293b;
+  --accent-foreground: #f1f5f9;
+  --input: #1e293b;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* Ensure all interactive areas use dark theme */
+.session-chat-area {
+  background-color: #020617;
+  color: #f1f5f9;
+}
+.session-chat-area input,
+.session-chat-area textarea {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+.session-chat-area input::placeholder,
+.session-chat-area textarea::placeholder {
+  color: #64748b;
+}
+.session-chat-area .run-card-surface {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+.session-chat-area .run-card-surface .text-muted-foreground {
+  color: #94a3b8;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}

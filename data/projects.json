@@ -1,0 +1,32 @@
+[
+  {
+    "id": "proj_1772200154566_98iay93",
+    "user_id": "local_user",
+    "name": "Kalk nimbus blockchain",
+    "repo_scan": "",
+    "total_tasks": 7,
+    "completed_tasks": 1,
+    "created_at": "2026-02-27T13:49:14.566Z",
+    "updated_at": "2026-03-20T15:11:57.903Z"
+  },
+  {
+    "id": "proj_1772452916291_46kc7hr",
+    "user_id": "local_user",
+    "name": "chrome wallet extension",
+    "repo_scan": "",
+    "total_tasks": 9,
+    "completed_tasks": 3,
+    "created_at": "2026-03-02T12:01:56.291Z",
+    "updated_at": "2026-03-17T12:03:48.503Z"
+  },
+  {
+    "id": "proj_1773770384537_ereescd",
+    "user_id": "local_user",
+    "name": "EOA Wallet",
+    "repo_scan": "",
+    "total_tasks": 1,
+    "completed_tasks": 0,
+    "created_at": "2026-03-17T17:59:44.537Z",
+    "updated_at": "2026-03-18T11:16:36.409Z"
+  }
+]

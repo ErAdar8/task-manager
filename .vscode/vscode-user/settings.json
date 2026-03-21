@@ -1,0 +1,89 @@
+{
+  "workbench.colorTheme": "KALK Dark",
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "workbench.enableExperiments": false,
+  "extensions.ignoreRecommendations": true,
+  "update.showReleaseNotes": false,
+  "telemetry.telemetryLevel": "off",
+  "workbench.editor.enablePreview": false,
+  "editor.formatOnSave": true,
+  "editor.codeLens": false,
+  "editor.semanticHighlighting.enabled": false,
+  "editor.scrollBeyondLastLine": false,
+  "git.enabled": false,
+  "scm.diffDecorations": "none",
+  "remote.autoForwardPorts": false,
+  "files.watcherExclude": {
+    "setup.kai": true,
+    "setup.kbi": true,
+    "MPS_DEPLOY.kagent": true,
+    ".next": true,
+    ".git": true,
+    ".vscode": true,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.tar.gz": true
+  },
+  "search.exclude": {
+    "setup.kai": true,
+    "setup.kbi": true,
+    "MPS_DEPLOY.kagent": true,
+    ".next": true,
+    ".git": true,
+    ".vscode": true,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.tar.gz": true
+  },
+  "files.exclude": {
+    "setup.kai": true,
+    "setup.kbi": true,
+    "MPS_DEPLOY.kagent": true,
+    ".next": true,
+    ".git": true,
+    ".vscode": true,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.tar.gz": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[scss]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[less]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[sql]": {
+    "editor.defaultFormatter": "renesaarsoo.sql-formatter-vsc"
+  },
+  "[prisma]": {
+    "editor.defaultFormatter": "KALK.vscode-prisma"
+  }
+}
