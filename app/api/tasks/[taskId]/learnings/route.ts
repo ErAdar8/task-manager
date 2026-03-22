@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok, err } from "@/lib/api-types";
-import { addTaskLearning, readTask } from "@/lib/storage/tasks";
+import { addLearningToTask } from "@/lib/storage/learnings";
+import { readTask } from "@/lib/storage/tasks";
 
 type RouteParams = { params: Promise<{ taskId: string }> };
 
@@ -30,6 +31,7 @@ export async function POST(
     content?: unknown;
     category?: unknown;
     attachments?: unknown;
+    title?: unknown;
   };
   if (typeof body.content !== "string" || body.content.trim().length === 0) {
     return NextResponse.json(err("content is required"), { status: 400 });
@@ -40,16 +42,17 @@ export async function POST(
       ? (body.attachments as string[])
       : [];
 
-  const updated = await addTaskLearning(taskId, {
+  const updated = await addLearningToTask(taskId, {
     content: body.content.trim(),
     category:
       typeof body.category === "string" && body.category.trim().length > 0
         ? body.category.trim()
         : undefined,
     attachments,
+    title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined,
   });
   if (!updated) {
     return NextResponse.json(err("Failed to add learning"), { status: 500 });
   }
-  return NextResponse.json(ok(updated));
+  return NextResponse.json(ok(updated.task));
 }

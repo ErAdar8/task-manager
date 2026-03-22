@@ -1,16 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, ClipboardCopy, ImagePlus, Loader2, X } from "lucide-react";
+import { ArrowLeft, Check, ClipboardCopy, Download, ImagePlus, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { Learning, Task, TaskIssue } from "@/schemas/tasks";
-import { generateTaskAwareRepoScanPromptFromDraft } from "@/lib/prompts";
+import { CollapsibleSection } from "@/components/collapsible-section";
+import { LearningCard } from "@/components/cards/learning-card";
+import { LearningModal } from "@/components/modals/learning-modal";
+import type { StandaloneLearning } from "@/schemas/learnings";
+import type { Task, TaskIssue } from "@/schemas/tasks";
+import { generateTaskAwareRepoScanPromptFromDraft } from "@/lib/cursor-prompts";
 import CompleteTaskModal from "@/components/tasks/complete-task-modal";
+import { AnalysisTypeSelector } from "@/components/tasks/analysis-type-selector";
+import { AnalysisResultView } from "@/components/tasks/analysis-result-view";
+import {
+  buildAnalyzedTaskExportMarkdown,
+  exportFilenameForTask,
+} from "@/lib/export-analyzed-task";
 
 const DEFAULT_WORK_PROCESS_TEXT =
   "I started by researching REACT APP & EXTENSION and created 2 versions of extensions and one application.";
@@ -22,27 +32,6 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-function getDisplayUnderstanding(task: Task): string {
-  if (task.user_edited_understanding) {
-    return task.user_edited_understanding;
-  }
-  if (!task.understanding) return "";
-  const u = task.understanding;
-  const parts = [
-    `High-Level Goal:\n${u.high_level_goal}`,
-    `Why This Matters:\n${u.why_this_matters}`,
-    u.estimated_time ? `Estimated Time: ${u.estimated_time}` : "",
-  ];
-  if ((u.stages?.length ?? 0) > 0) {
-    u.stages!.forEach((s, i) => {
-      parts.push(`Stage ${i + 1}: ${s.title}\nGoal: ${s.goal}\nTasks:\n${s.tasks.map((t) => `- ${t}`).join("\n")}\nDone when:\n${s.completion_criteria.map((c) => `- ${c}`).join("\n")}`);
-    });
-  } else if ((u.major_steps?.length ?? 0) > 0) {
-    parts.push(`Major Steps:\n${u.major_steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}`);
-  }
-  return parts.filter(Boolean).join("\n\n");
 }
 
 /** Build a prompt for Claude to produce a minimal architecture plan from the current Understanding. */
@@ -79,81 +68,6 @@ ${stagesText}
 Provide a minimal, practical architecture plan to fulfill the above. Focus on Phase 1 / first implementation scope only. No code. No unnecessary future-proofing. Simple, readable structure: what to build, in what order, and how to know each part is done.`;
 }
 
-function generateCursorAnalysisPrompt(task: Task): string {
-  const understanding = task.understanding;
-  if (!understanding) {
-    return `⚠️ ANALYSIS ONLY — DO NOT MAKE ANY CODE CHANGES ⚠️
-
-TASK: ${task.title}
-
-YOUR JOB: SCAN AND REPORT ONLY
-Do NOT write or change any code. Analyze repository structure and report relevant files for this task.`;
-  }
-
-  return `⚠️ ANALYSIS ONLY — DO NOT MAKE ANY CODE CHANGES ⚠️
-
-TASK: ${task.title}
-
-GOAL:
-${understanding.high_level_goal}
-
-YOUR JOB: SCAN AND REPORT ONLY
-I need you to analyze this repository to help me understand the codebase structure before making changes.
-
-DO NOT:
-❌ Make any code changes
-❌ Create any files
-❌ Modify existing files
-❌ Implement any features
-❌ Write any code
-❌ Suggest final implementation details yet
-
-DO:
-✓ Scan the repository structure
-✓ Identify relevant files for this task
-✓ Report which files would likely need modification
-✓ Explain current code architecture
-✓ List dependencies and imports
-✓ Identify potential risks or conflicts
-
-REPORT FORMAT:
-
-REPOSITORY STRUCTURE
-- List key directories relevant to this task
-- Identify main entry points
-
-RELEVANT FILES
-For each file that would need modification:
-- File path
-- Current purpose/functionality
-- Why it is relevant to this task
-- Dependencies (what it imports/uses)
-
-CURRENT ARCHITECTURE
-- How is this feature currently organized (if it exists)?
-- What patterns are used in this codebase?
-- Any framework-specific conventions?
-
-DEPENDENCIES
-- What libraries/packages are involved?
-- Any version constraints to be aware of?
-
-POTENTIAL RISKS
-- What could break if these files are changed later?
-- Are there tests covering these areas?
-- Any circular dependency or coupling concerns?
-
-MAJOR STEPS TO SCAN FOR:
-${(understanding.major_steps ?? []).map((step, i) => `${i + 1}. ${step}`).join("\n")}
-
-KEY CONCEPTS:
-${(understanding.key_concepts ?? []).join(", ")}
-
-IMPORTANT: This is ANALYSIS ONLY. After you provide this report, I will use it to plan implementation with another agent. You will receive specific implementation instructions later.
-
-Provide a detailed analysis report using the format above.`;
-}
-
 export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -161,36 +75,26 @@ export default function TaskDetailPage() {
   const taskId = typeof params.taskId === "string" ? params.taskId : null;
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editingUnderstanding, setEditingUnderstanding] = useState(false);
-  const [understandingDraft, setUnderstandingDraft] = useState("");
-  const [regenNotes, setRegenNotes] = useState("");
-  const [selectedClarifications, setSelectedClarifications] = useState<string[]>([]);
-  const [customQuestion, setCustomQuestion] = useState("");
   const [notes, setNotes] = useState("");
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
-  const [cursorRepoAnalysis, setCursorRepoAnalysis] = useState("");
-  const [isSavingCursorRepoAnalysis, setIsSavingCursorRepoAnalysis] =
-    useState(false);
   const [cursorRepoScan, setCursorRepoScan] = useState("");
-  const [activeTab, setActiveTab] = useState<
-    "understanding" | "architecture" | "notes" | "learnings" | "work_process" | "issues"
-  >("understanding");
-  const [isAnalyzingFull, setIsAnalyzingFull] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [standaloneLearnings, setStandaloneLearnings] = useState<StandaloneLearning[]>([]);
+  const [detailLearningModalOpen, setDetailLearningModalOpen] = useState(false);
+  const [detailLearning, setDetailLearning] = useState<StandaloneLearning | null>(null);
+  const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
+  const [analysisRunningLabel, setAnalysisRunningLabel] = useState<string | null>(null);
   const [analyzeFullError, setAnalyzeFullError] = useState<string | null>(null);
-  const [analyzeTakingLong, setAnalyzeTakingLong] = useState(false);
+  const [showAnalysisPicker, setShowAnalysisPicker] = useState(false);
+  /** When task has a saved analysis_mode, user can open the full flow picker from the draft card. */
+  const [showDraftFlowOverride, setShowDraftFlowOverride] = useState(false);
   const [workProcessDraft, setWorkProcessDraft] = useState("");
   const [isSavingWorkProcess, setIsSavingWorkProcess] = useState(false);
   const [isSavingIssues, setIsSavingIssues] = useState(false);
   const [newIssueWrong, setNewIssueWrong] = useState("");
   const [newIssueSolved, setNewIssueSolved] = useState("");
   const learningContentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [editingLearning, setEditingLearning] = useState<Learning | null>(null);
-  const [learningEditContent, setLearningEditContent] = useState("");
-  const [learningEditCategory, setLearningEditCategory] = useState("");
-  const [isSavingLearningEdit, setIsSavingLearningEdit] = useState(false);
-  const [deleteLearningId, setDeleteLearningId] = useState<string | null>(null);
-  const [isDeletingLearning, setIsDeletingLearning] = useState(false);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [showCopyToast, setShowCopyToast] = useState(false);
   const [architectureDraft, setArchitectureDraft] = useState("");
@@ -204,9 +108,9 @@ export default function TaskDetailPage() {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftRawInput, setDraftRawInput] = useState("");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [isAnalyzingDraft, setIsAnalyzingDraft] = useState(false);
   const [draftCopyToast, setDraftCopyToast] = useState(false);
-  const [learningModalOpen, setLearningModalOpen] = useState(false);
+  const [exportCopiedAt, setExportCopiedAt] = useState<number | null>(null);
+  const [addLearningModalOpen, setAddLearningModalOpen] = useState(false);
   const [learningDrafts, setLearningDrafts] = useState<
     Array<{ content: string; category: string; attachments: string[] }>
   >([
@@ -214,10 +118,8 @@ export default function TaskDetailPage() {
     { content: "", category: "", attachments: [] },
   ]);
   const [isAddingLearning, setIsAddingLearning] = useState(false);
-  const [learningEditAttachments, setLearningEditAttachments] = useState<string[]>([]);
   const [learningDraftImageTargetIndex, setLearningDraftImageTargetIndex] = useState<number | null>(null);
   const learningImageInputRef = useRef<HTMLInputElement>(null);
-  const learningEditImageInputRef = useRef<HTMLInputElement>(null);
   const loadTask = useCallback(async () => {
     if (!taskId) return;
     setLoading(true);
@@ -232,14 +134,7 @@ export default function TaskDetailPage() {
           ? json.data.work_process
           : DEFAULT_WORK_PROCESS_TEXT
       );
-      setUnderstandingDraft(getDisplayUnderstanding(json.data));
-      setSelectedClarifications(json.data.requested_clarifications ?? []);
       setNotes(json.data?.task_notes ?? "");
-      setCursorRepoAnalysis((prev) =>
-        prev.length > 0 && isSavingCursorRepoAnalysis
-          ? prev
-          : (json.data?.cursor_repo_analysis ?? "")
-      );
       setCursorRepoScan(json.data?.cursor_repo_scan ?? "");
       setArchitectureDraft(json.data?.architecture?.detailed_breakdown ?? "");
       setAnalyzeFullError(json.data?.analysis_error ?? null);
@@ -247,59 +142,98 @@ export default function TaskDetailPage() {
       setTask(null);
     }
     setLoading(false);
-  }, [taskId, isSavingCursorRepoAnalysis]);
+  }, [taskId]);
 
   useEffect(() => {
     void loadTask();
   }, [loadTask]);
 
-  // Single-flow analysis: when task is in "analyzing", run analyze-full once
   useEffect(() => {
-    if (!task || task.status !== "analyzing" || !taskId) return;
-    let cancelled = false;
-    setAnalyzeFullError(null);
-    setAnalyzeTakingLong(false);
-    setIsAnalyzingFull(true);
-    const longTimeoutId = setTimeout(() => {
-      if (!cancelled) setAnalyzeTakingLong(true);
-    }, 200_000);
-    (async () => {
-      try {
-        const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/analyze-full`, {
-          method: "POST",
-        });
-        if (cancelled) return;
-        const json = (await res.json()) as { success?: boolean; data?: Task; error?: string };
-        if (json.success && json.data) {
-          setTask(json.data);
-        } else {
-          setAnalyzeFullError(json.error ?? "Analysis failed");
-          if (!cancelled) await loadTask();
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setAnalyzeFullError(e instanceof Error ? e.message : "Analysis failed");
-          await loadTask();
-        }
-      } finally {
-        if (!cancelled) {
-          setIsAnalyzingFull(false);
-          setAnalyzeTakingLong(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-      clearTimeout(longTimeoutId);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when status is analyzing or taskId changes
-  }, [task?.status, taskId]);
+    setShowDraftFlowOverride(false);
+  }, [taskId]);
 
   useEffect(() => {
-    if (learningModalOpen && learningContentTextareaRef.current) {
+    if (!taskId) return;
+    void fetch(`/api/learnings?taskId=${encodeURIComponent(taskId)}`)
+      .then((r) => r.json())
+      .then((j: { success?: boolean; data?: StandaloneLearning[] }) => {
+        if (j.success && j.data) setStandaloneLearnings(j.data);
+      });
+  }, [taskId, task?.updated_at]);
+
+  const persistDraftFields = useCallback(async () => {
+    if (!task) return;
+    await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: draftTitle.trim() || task.title,
+        raw_input: draftRawInput,
+        task_notes: notes,
+        cursor_repo_scan: cursorRepoScan,
+      }),
+    });
+  }, [task, draftTitle, draftRawInput, notes, cursorRepoScan]);
+
+  const runAnalysis = useCallback(
+    async (kind: "execute" | "understand", userQuestions?: string) => {
+      if (!taskId || !task) return;
+      setIsRunningAnalysis(true);
+      setAnalyzeFullError(null);
+      setAnalysisRunningLabel(
+        kind === "execute"
+          ? "Running execution analysis with Claude…"
+          : "Running deep understanding analysis with Claude…"
+      );
+      try {
+        if (task.status === "draft") {
+          await persistDraftFields();
+        }
+        await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "analyzing" }),
+        });
+        const url =
+          kind === "execute"
+            ? `/api/tasks/${encodeURIComponent(taskId)}/analyze-execute`
+            : `/api/tasks/${encodeURIComponent(taskId)}/analyze-understand`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body:
+            kind === "execute"
+              ? JSON.stringify({ mode: "execute" })
+              : JSON.stringify({
+                  mode: "understand",
+                  userQuestions: userQuestions || undefined,
+                }),
+        });
+        const json = (await res.json()) as { success?: boolean; data?: Task; error?: string };
+        if (!json.success) {
+          setAnalyzeFullError(json.error ?? "Analysis failed");
+          await loadTask();
+          return;
+        }
+        if (json.data) setTask(json.data);
+        else await loadTask();
+        setShowAnalysisPicker(false);
+      } catch (e) {
+        setAnalyzeFullError(e instanceof Error ? e.message : "Analysis failed");
+        await loadTask();
+      } finally {
+        setIsRunningAnalysis(false);
+        setAnalysisRunningLabel(null);
+      }
+    },
+    [taskId, task, persistDraftFields, loadTask]
+  );
+
+  useEffect(() => {
+    if (addLearningModalOpen && learningContentTextareaRef.current) {
       learningContentTextareaRef.current.focus();
     }
-  }, [learningModalOpen]);
+  }, [addLearningModalOpen]);
 
   const saveArchitecture = async () => {
     if (!taskId) return;
@@ -333,20 +267,16 @@ export default function TaskDetailPage() {
     return <main className="flex-1 flex items-center justify-center text-slate-400">Task not found</main>;
   }
 
-  // Full-page loading when running single-flow analysis
-  if (task.status === "analyzing" || isAnalyzingFull) {
+  // Full-page loading when Claude analysis is in progress
+  if (task.status === "analyzing" || isRunningAnalysis) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-950 text-slate-100 p-8">
         <Loader2 className="h-10 w-10 animate-spin text-slate-400" />
-        <p className="text-slate-400 font-medium">Analyzing task</p>
+        <p className="text-slate-400 font-medium">Analyzing with Claude…</p>
         <p className="text-sm text-slate-500 max-w-md text-center">
-          Running analysis: understanding and key concepts. This usually takes 1–3 minutes. Timeout: 5 min.
+          {analysisRunningLabel ??
+            "Running analysis. This usually takes 1–3 minutes depending on task size."}
         </p>
-        {analyzeTakingLong && (
-          <p className="text-sm text-amber-400 max-w-md text-center">
-            This is taking longer than expected. The request may have timed out (5 min). You can go back and try again.
-          </p>
-        )}
         {analyzeFullError && (
           <div className="mt-4 max-w-lg w-full rounded-lg border border-red-800 bg-red-950/30 p-4 text-left">
             <p className="text-sm font-medium text-red-300">Analysis failed</p>
@@ -363,27 +293,6 @@ export default function TaskDetailPage() {
 
   const displayAnalysisError = analyzeFullError ?? task.analysis_error ?? null;
   const showAnalysisErrorBanner = !!displayAnalysisError && task.status === "draft";
-
-  const handleManualUnderstandingSave = async () => {
-    await fetch(`/api/tasks/${encodeURIComponent(task.id)}/edit-understanding`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edited_text: understandingDraft, request_regeneration: false }),
-    });
-    setEditingUnderstanding(false);
-    await loadTask();
-  };
-
-  const handleRegenerate = async () => {
-    await fetch(`/api/tasks/${encodeURIComponent(task.id)}/edit-understanding`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ regeneration_notes: regenNotes, request_regeneration: true }),
-    });
-    setRegenNotes("");
-    setEditingUnderstanding(false);
-    await loadTask();
-  };
 
   const saveNotes = async () => {
     if (notes === (task?.task_notes ?? "")) return;
@@ -429,23 +338,6 @@ export default function TaskDetailPage() {
     }
   };
 
-  const saveCursorAnalysis = async () => {
-    if (cursorRepoAnalysis === (task?.cursor_repo_analysis ?? "")) return;
-    setIsSavingCursorRepoAnalysis(true);
-    try {
-      await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cursor_repo_analysis: cursorRepoAnalysis }),
-      });
-      await loadTask();
-    } catch (error) {
-      console.error("Failed to save Cursor repo analysis:", error);
-    } finally {
-      setIsSavingCursorRepoAnalysis(false);
-    }
-  };
-
   const saveDraftTask = async () => {
     if (!task) return;
     setIsSavingDraft(true);
@@ -469,32 +361,6 @@ export default function TaskDetailPage() {
     }
   };
 
-  /** Start full analysis for a draft task: save current fields, set status to "analyzing"; useEffect will call analyze-full */
-  const analyzeDraftTask = async () => {
-    if (!task) return;
-    setIsAnalyzingDraft(true);
-    setAnalyzeFullError(null);
-    try {
-      await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: draftTitle.trim() || task.title,
-          raw_input: draftRawInput,
-          task_notes: notes,
-          cursor_repo_scan: cursorRepoScan,
-          status: "analyzing",
-        }),
-      });
-      await loadTask();
-    } catch (error) {
-      console.error("Failed to start draft analysis:", error);
-      alert("Failed to start analysis.");
-    } finally {
-      setIsAnalyzingDraft(false);
-    }
-  };
-
   const openAddLearningFromNotes = () => {
     const textarea = notesTextareaRef.current;
     const selected =
@@ -505,7 +371,7 @@ export default function TaskDetailPage() {
       { content: selected.trim(), category: "", attachments: [] },
       { content: "", category: "", attachments: [] },
     ]);
-    setLearningModalOpen(true);
+    setAddLearningModalOpen(true);
   };
 
   const openAddLearningModal = () => {
@@ -513,7 +379,7 @@ export default function TaskDetailPage() {
       { content: "", category: "", attachments: [] },
       { content: "", category: "", attachments: [] },
     ]);
-    setLearningModalOpen(true);
+    setAddLearningModalOpen(true);
   };
 
   const addLearningsFromModal = async () => {
@@ -534,13 +400,13 @@ export default function TaskDetailPage() {
         });
         if (!response.ok) throw new Error("Failed to add learning");
       }
-      setLearningModalOpen(false);
+      setAddLearningModalOpen(false);
       setLearningDrafts([
         { content: "", category: "", attachments: [] },
         { content: "", category: "", attachments: [] },
       ]);
       await loadTask();
-      setActiveTab("learnings");
+      setCurrentStep(3);
     } catch (error) {
       console.error("Failed to add learning:", error);
       alert("Failed to add learning.");
@@ -549,53 +415,29 @@ export default function TaskDetailPage() {
     }
   };
 
-  const saveLearningEdit = async () => {
-    if (!task || !editingLearning) return;
-    setIsSavingLearningEdit(true);
+  const copyExportToClipboard = async () => {
+    if (!task) return;
+    const md = buildAnalyzedTaskExportMarkdown(task);
     try {
-      const res = await fetch(
-        `/api/tasks/${encodeURIComponent(task.id)}/learnings/${encodeURIComponent(editingLearning.id)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: learningEditContent.trim(),
-            category: learningEditCategory.trim() || undefined,
-            attachments: learningEditAttachments,
-          }),
-        }
-      );
-      if (!res.ok) throw new Error("Failed to update learning");
-      setEditingLearning(null);
-      setLearningEditContent("");
-      setLearningEditCategory("");
-      setLearningEditAttachments([]);
-      await loadTask();
-    } catch (error) {
-      console.error("Failed to update learning:", error);
-      alert("Failed to update learning.");
-    } finally {
-      setIsSavingLearningEdit(false);
+      await navigator.clipboard.writeText(md);
+      setExportCopiedAt(Date.now());
+      setTimeout(() => setExportCopiedAt(null), 2500);
+    } catch (err) {
+      console.error("Clipboard failed:", err);
+      alert("Could not copy to clipboard. Use Download instead.");
     }
   };
 
-  const confirmDeleteLearning = async () => {
-    if (!task || !deleteLearningId) return;
-    setIsDeletingLearning(true);
-    try {
-      const res = await fetch(
-        `/api/tasks/${encodeURIComponent(task.id)}/learnings/${encodeURIComponent(deleteLearningId)}`,
-        { method: "DELETE" }
-      );
-      if (!res.ok) throw new Error("Failed to delete learning");
-      setDeleteLearningId(null);
-      await loadTask();
-    } catch (error) {
-      console.error("Failed to delete learning:", error);
-      alert("Failed to delete learning.");
-    } finally {
-      setIsDeletingLearning(false);
-    }
+  const downloadExport = () => {
+    if (!task) return;
+    const md = buildAnalyzedTaskExportMarkdown(task);
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = exportFilenameForTask(task);
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -617,11 +459,40 @@ export default function TaskDetailPage() {
             </Button>
           </div>
         )}
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">{task.title}</h1>
-          <p className="text-sm text-slate-400">
-            Status: {task.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1 min-w-0">
+            <h1 className="text-2xl font-semibold">{task.title}</h1>
+            <p className="text-sm text-slate-400">
+              Status: {task.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-slate-600 text-slate-200 hover:bg-slate-800"
+              onClick={() => void copyExportToClipboard()}
+              title="Copy task card + full analysis as Markdown for a reviewer or agent"
+            >
+              <ClipboardCopy className="h-4 w-4 mr-2" />
+              Export analyzed task
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-slate-600 text-slate-200 hover:bg-slate-800"
+              onClick={downloadExport}
+              title="Download the same content as a .md file"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download .md
+            </Button>
+            {exportCopiedAt != null && (
+              <span className="text-xs text-emerald-400">Copied to clipboard</span>
+            )}
+          </div>
         </div>
 
         {task.status === "draft" ? (
@@ -651,6 +522,64 @@ export default function TaskDetailPage() {
                   placeholder="Paste the full task card or describe the task. Add notes or clarifications — analysis will use this full text."
                 />
               </div>
+              {!task.analysis_mode && (
+                <AnalysisTypeSelector
+                  onSelectExecute={() => void runAnalysis("execute")}
+                  onSelectUnderstand={(q) => void runAnalysis("understand", q)}
+                  isAnalyzing={isRunningAnalysis}
+                  runningLabel={analysisRunningLabel}
+                />
+              )}
+              {task.analysis_mode && !showDraftFlowOverride && (
+                <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 space-y-3">
+                  <p className="text-sm text-slate-300">
+                    <span className="text-slate-500">Saved flow:</span>{" "}
+                    {task.analysis_mode === "execute"
+                      ? "Understand & Execute"
+                      : "Deep Understanding"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Chosen when the task was created. Use Change flow to pick a different analysis, or run with this flow.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={isRunningAnalysis}
+                      onClick={() => void runAnalysis(task.analysis_mode!)}
+                    >
+                      Run analysis
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-slate-600 text-slate-200"
+                      disabled={isRunningAnalysis}
+                      onClick={() => setShowDraftFlowOverride(true)}
+                    >
+                      Change flow
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {task.analysis_mode && showDraftFlowOverride && (
+                <div className="space-y-2">
+                  <AnalysisTypeSelector
+                    onSelectExecute={() => void runAnalysis("execute")}
+                    onSelectUnderstand={(q) => void runAnalysis("understand", q)}
+                    isAnalyzing={isRunningAnalysis}
+                    runningLabel={analysisRunningLabel}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-slate-400 hover:text-slate-200"
+                    onClick={() => setShowDraftFlowOverride(false)}
+                  >
+                    Use saved flow instead
+                  </Button>
+                </div>
+              )}
               <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-3">
                 <p className="text-sm font-medium text-slate-300">Cursor repo scan</p>
                 <p className="text-xs text-slate-500">
@@ -694,23 +623,9 @@ export default function TaskDetailPage() {
                   variant="outline"
                   className="border-slate-600 text-slate-100"
                   onClick={() => void saveDraftTask()}
-                  disabled={isSavingDraft || isAnalyzingDraft}
+                  disabled={isSavingDraft || isRunningAnalysis}
                 >
                   {isSavingDraft ? "Saving…" : "Save draft"}
-                </Button>
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => void analyzeDraftTask()}
-                  disabled={isSavingDraft || isAnalyzingDraft || !draftRawInput.trim()}
-                >
-                  {isAnalyzingDraft ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Starting…
-                    </>
-                  ) : (
-                    "Analyze Task"
-                  )}
                 </Button>
               </div>
             </CardContent>
@@ -750,56 +665,39 @@ export default function TaskDetailPage() {
           task.status === "completed"
         ) && (
           <Card className="border-slate-800 bg-slate-900/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="flex flex-wrap gap-1 border-b border-slate-700 w-full">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-wrap gap-2 w-full">
                 {(
                   [
-                    "understanding",
-                    "architecture",
-                    "notes",
-                    "learnings",
-                    "work_process",
-                    "issues",
+                    { step: 1, label: "Understanding" },
+                    { step: 2, label: "Notes" },
+                    { step: 3, label: "Learnings" },
+                    { step: 4, label: "Complete" },
                   ] as const
-                ).map((tab) => (
+                ).map(({ step, label }) => (
                   <button
-                    key={tab}
+                    key={step}
                     type="button"
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-                      activeTab === tab
-                        ? "border-b-2 border-emerald-500 text-emerald-400 bg-slate-800/50"
-                        : "text-slate-400 hover:text-slate-200 border-b-2 border-transparent"
+                    onClick={() => setCurrentStep(step)}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      currentStep === step
+                        ? "bg-emerald-600/30 text-emerald-200 border border-emerald-500/50"
+                        : "text-slate-400 hover:text-slate-200 border border-transparent"
                     }`}
                   >
-                    {tab === "work_process" ? "Work process" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    {label}
                   </button>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {task.status === "draft" && (
-                  <Button
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => void analyzeDraftTask()}
-                    disabled={isAnalyzingDraft || !draftRawInput.trim()}
-                  >
-                    {isAnalyzingDraft ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Starting…
-                      </>
-                    ) : (
-                      "Analyze Task"
-                    )}
-                  </Button>
-                )}
+              <div className="flex flex-wrap gap-2 shrink-0">
                 {task.status !== "completed" && task.status !== "draft" && (
                   <Button
+                    type="button"
                     variant="outline"
-                    className="border-emerald-600 text-emerald-200 hover:bg-emerald-900/40"
-                    onClick={() => setCompleteModalOpen(true)}
+                    className="border-slate-600 text-slate-200"
+                    onClick={() => setShowAnalysisPicker((v) => !v)}
                   >
-                    ✓ Mark Complete
+                    {showAnalysisPicker ? "Hide re-analyze" : "Re-analyze"}
                   </Button>
                 )}
                 {task.status !== "draft" && (
@@ -816,13 +714,63 @@ export default function TaskDetailPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {activeTab === "understanding" && (
+              {currentStep === 1 && (
                 <div className="space-y-6">
+                  {task.status !== "draft" &&
+                    !task.understanding &&
+                    task.analysis_mode &&
+                    !showAnalysisPicker && (
+                      <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 space-y-3">
+                        <p className="text-sm text-slate-300">
+                          <span className="text-slate-500">Saved flow:</span>{" "}
+                          {task.analysis_mode === "execute"
+                            ? "Understand & Execute"
+                            : "Deep Understanding"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Use Re-analyze to switch flows, or run analysis with the saved flow below.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            disabled={isRunningAnalysis}
+                            onClick={() => void runAnalysis(task.analysis_mode!)}
+                          >
+                            Run analysis
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-slate-600 text-slate-200"
+                            disabled={isRunningAnalysis}
+                            onClick={() => setShowAnalysisPicker(true)}
+                          >
+                            Change flow
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  {task.status !== "draft" &&
+                    ((!task.understanding && (!task.analysis_mode || showAnalysisPicker)) ||
+                      (task.understanding && showAnalysisPicker)) && (
+                      <AnalysisTypeSelector
+                        onSelectExecute={() => void runAnalysis("execute")}
+                        onSelectUnderstand={(q) => void runAnalysis("understand", q)}
+                        isAnalyzing={isRunningAnalysis}
+                        runningLabel={analysisRunningLabel}
+                      />
+                    )}
+                  <AnalysisResultView task={task} />
                   {!task.understanding ? (
                     <p className="text-sm text-slate-400">
                       {task.status === "draft"
-                        ? "No analysis yet. Use \"Analyze Task\" above to run analysis (understanding + key concepts)."
-                        : "Understanding is not available yet."}
+                        ? task.analysis_mode && !showDraftFlowOverride
+                          ? "Run analysis from the Edit draft task card above, or change flow to pick a different analysis."
+                          : "Run Understand & Execute or Deep Understanding from the Edit draft task card above."
+                        : task.analysis_mode && !showAnalysisPicker
+                          ? "Run analysis with your saved flow above, or use Change flow / Re-analyze to switch."
+                          : "Pick a flow above to run Claude analysis. To run again later, use Re-analyze in the header."}
                     </p>
                   ) : (
                     <>
@@ -920,45 +868,185 @@ export default function TaskDetailPage() {
                       )}
                     </>
                   )}
-                </div>
-              )}
-              {activeTab === "architecture" && (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-400">
-                    Edit your architecture plan here. Use &quot;Copy for Claude&quot; in the Understanding tab to generate a minimal plan, then paste or type here. Saved automatically when you leave the field.
-                  </p>
-                  <Textarea
-                    value={architectureDraft}
-                    onChange={(e) => setArchitectureDraft(e.target.value)}
-                    onBlur={() => void saveArchitecture()}
-                    placeholder="Paste or write your architecture plan. You can use “Copy for Claude” in the Understanding tab to get a prompt, then paste Claude’s reply here."
-                    className="min-h-[320px] bg-slate-800 border-slate-700 text-slate-100 font-mono text-sm whitespace-pre-wrap"
-                  />
-                  <div className="flex items-center gap-2">
-                    {isSavingArchitecture && (
-                      <span className="text-xs text-slate-400">Saving…</span>
-                    )}
-                    {architectureSavedAt != null && !isSavingArchitecture && (
-                      <span className="text-xs text-emerald-400">Saved</span>
-                    )}
+                  <div className="space-y-3 pt-6 border-t border-slate-800">
+                    <CollapsibleSection title="Architecture" defaultOpen={false}>
+                      <div className="space-y-3">
+                        <p className="text-sm text-slate-400">
+                          Edit your architecture plan here. Use &quot;Copy for Claude&quot; above to generate a minimal plan, then paste or type here. Saved automatically when you leave the field.
+                        </p>
+                        <Textarea
+                          value={architectureDraft}
+                          onChange={(e) => setArchitectureDraft(e.target.value)}
+                          onBlur={() => void saveArchitecture()}
+                          placeholder="Paste or write your architecture plan."
+                          className="min-h-[320px] bg-slate-800 border-slate-700 text-slate-100 font-mono text-sm whitespace-pre-wrap"
+                        />
+                        <div className="flex items-center gap-2">
+                          {isSavingArchitecture && (
+                            <span className="text-xs text-slate-400">Saving…</span>
+                          )}
+                          {architectureSavedAt != null && !isSavingArchitecture && (
+                            <span className="text-xs text-emerald-400">Saved</span>
+                          )}
+                        </div>
+                        {(task.status === "architecture_ready" || task.status === "ready") && (
+                          <Button
+                            onClick={async () => {
+                              await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: "in_progress" }),
+                              });
+                              await loadTask();
+                            }}
+                          >
+                            Mark as In Progress
+                          </Button>
+                        )}
+                      </div>
+                    </CollapsibleSection>
+                    <CollapsibleSection title="Work process" defaultOpen={false}>
+                      <div className="space-y-3">
+                        <p className="text-sm text-slate-400">
+                          Document your work process for this task (saved automatically).
+                        </p>
+                        <Textarea
+                          value={workProcessDraft}
+                          onChange={(e) => setWorkProcessDraft(e.target.value)}
+                          onBlur={async () => {
+                            if (!task || workProcessDraft === (task.work_process ?? ""))
+                              return;
+                            setIsSavingWorkProcess(true);
+                            try {
+                              await fetch(
+                                `/api/tasks/${encodeURIComponent(task.id)}`,
+                                {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    work_process: workProcessDraft,
+                                  }),
+                                }
+                              );
+                              await loadTask();
+                            } finally {
+                              setIsSavingWorkProcess(false);
+                            }
+                          }}
+                          className="min-h-[220px] bg-slate-800 border-slate-700 whitespace-pre-wrap text-slate-100"
+                          placeholder={DEFAULT_WORK_PROCESS_TEXT}
+                        />
+                        {isSavingWorkProcess && (
+                          <span className="text-xs text-slate-400">Saving...</span>
+                        )}
+                      </div>
+                    </CollapsibleSection>
+                    <CollapsibleSection title="Issues" defaultOpen={false}>
+                      <div className="space-y-4">
+                        <p className="text-sm text-slate-400">
+                          Document problems you ran into and how you solved them.
+                        </p>
+                        {(task.issues ?? []).length === 0 ? (
+                          <p className="text-sm text-slate-500">No issues logged yet.</p>
+                        ) : (
+                          <ul className="space-y-4">
+                            {(task.issues ?? []).map((issue) => (
+                              <li
+                                key={issue.id}
+                                className="border border-slate-700 rounded-lg p-4 bg-slate-800/50 space-y-2"
+                              >
+                                <p className="text-sm font-medium text-slate-300">What went wrong</p>
+                                <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                                  {issue.what_went_wrong}
+                                </p>
+                                <p className="text-sm font-medium text-slate-300 pt-2">How it was solved</p>
+                                <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                                  {issue.how_solved}
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-400 hover:text-red-300 mt-2"
+                                  onClick={async () => {
+                                    const next = (task.issues ?? []).filter((i) => i.id !== issue.id);
+                                    setIsSavingIssues(true);
+                                    try {
+                                      await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ issues: next }),
+                                      });
+                                      await loadTask();
+                                    } finally {
+                                      setIsSavingIssues(false);
+                                    }
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="border border-slate-700 rounded-lg p-4 bg-slate-800/30 space-y-3">
+                          <p className="text-sm font-medium text-slate-300">Add issue</p>
+                          <div>
+                            <label className="text-xs text-slate-500">What went wrong</label>
+                            <Textarea
+                              value={newIssueWrong}
+                              onChange={(e) => setNewIssueWrong(e.target.value)}
+                              placeholder="Describe the problem..."
+                              className="mt-1 min-h-[80px] bg-slate-800 border-slate-700 text-slate-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-500">How you solved it</label>
+                            <Textarea
+                              value={newIssueSolved}
+                              onChange={(e) => setNewIssueSolved(e.target.value)}
+                              placeholder="Describe the solution..."
+                              className="mt-1 min-h-[80px] bg-slate-800 border-slate-700 text-slate-100"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="border-slate-600 text-slate-100"
+                            disabled={!newIssueWrong.trim() || !newIssueSolved.trim() || isSavingIssues}
+                            onClick={async () => {
+                              const newIssue: TaskIssue = {
+                                id: `issue_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                                what_went_wrong: newIssueWrong.trim(),
+                                how_solved: newIssueSolved.trim(),
+                                created_at: new Date().toISOString(),
+                              };
+                              const next = [...(task.issues ?? []), newIssue];
+                              setIsSavingIssues(true);
+                              try {
+                                await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ issues: next }),
+                                });
+                                await loadTask();
+                                setNewIssueWrong("");
+                                setNewIssueSolved("");
+                              } finally {
+                                setIsSavingIssues(false);
+                              }
+                            }}
+                          >
+                            {isSavingIssues ? "Saving…" : "Add issue"}
+                          </Button>
+                        </div>
+                      </div>
+                    </CollapsibleSection>
                   </div>
-                  {(task.status === "architecture_ready" || task.status === "ready") && (
-                    <Button
-                      onClick={async () => {
-                        await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ status: "in_progress" }),
-                        });
-                        await loadTask();
-                      }}
-                    >
-                      Mark as In Progress
-                    </Button>
-                  )}
                 </div>
               )}
-              {activeTab === "notes" && (
+              {currentStep === 2 && (
                 <div className="space-y-3">
                   <p className="text-sm text-slate-400">
                     Implementation notes (saved automatically when you leave the field).
@@ -1046,64 +1134,23 @@ export default function TaskDetailPage() {
                   </div>
                 </div>
               )}
-              {activeTab === "learnings" && (
+              {currentStep === 3 && (
                 <div className="space-y-4">
-                  {task.learnings.length === 0 ? (
+                  {standaloneLearnings.length === 0 ? (
                     <p className="text-sm text-slate-400">No learnings yet.</p>
                   ) : (
-                    task.learnings.map((learning) => (
-                      <div
-                        key={learning.id}
-                        className="border border-slate-700 rounded-md p-4 space-y-2"
-                      >
-                        <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
-                          {learning.content}
-                        </p>
-                        {(learning.attachments?.length ?? 0) > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {learning.attachments!.map((dataUrl, i) => (
-                              /* eslint-disable-next-line @next/next/no-img-element -- data URL from user upload */
-                              <img
-                                key={i}
-                                src={dataUrl}
-                                alt=""
-                                className="h-16 w-16 rounded border border-slate-600 object-cover"
-                              />
-                            ))}
-                          </div>
-                        )}
-                        {learning.category && (
-                          <p className="text-xs text-slate-400 mt-1">
-                            {learning.category}
-                          </p>
-                        )}
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="border-slate-600 text-slate-100"
-                            onClick={() => {
-                              setEditingLearning(learning);
-                              setLearningEditContent(learning.content);
-                              setLearningEditCategory(learning.category ?? "");
-                              setLearningEditAttachments(learning.attachments ?? []);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => setDeleteLearningId(learning.id)}
-                            disabled={isDeletingLearning}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    ))
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {standaloneLearnings.map((l) => (
+                        <LearningCard
+                          key={l.id}
+                          learning={l}
+                          onOpen={() => {
+                            setDetailLearning(l);
+                            setDetailLearningModalOpen(true);
+                          }}
+                        />
+                      ))}
+                    </div>
                   )}
                   <Button
                     type="button"
@@ -1111,148 +1158,55 @@ export default function TaskDetailPage() {
                     className="border-slate-600 text-slate-100"
                     onClick={openAddLearningModal}
                   >
-                    + Add learning note
+                    + Add learning
                   </Button>
                 </div>
               )}
-              {activeTab === "work_process" && (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-400">
-                    Document your work process for this task (saved automatically).
-                  </p>
-                  <Textarea
-                    value={workProcessDraft}
-                    onChange={(e) => setWorkProcessDraft(e.target.value)}
-                    onBlur={async () => {
-                      if (!task || workProcessDraft === (task.work_process ?? ""))
-                        return;
-                      setIsSavingWorkProcess(true);
-                      try {
-                        await fetch(
-                          `/api/tasks/${encodeURIComponent(task.id)}`,
-                          {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              work_process: workProcessDraft,
-                            }),
-                          }
-                        );
-                        await loadTask();
-                      } finally {
-                        setIsSavingWorkProcess(false);
-                      }
-                    }}
-                    className="min-h-[220px] bg-slate-800 border-slate-700 whitespace-pre-wrap"
-                    placeholder={DEFAULT_WORK_PROCESS_TEXT}
-                  />
-                  {isSavingWorkProcess && (
-                    <span className="text-xs text-slate-400">Saving...</span>
-                  )}
-                </div>
-              )}
-              {activeTab === "issues" && (
+              {currentStep === 4 && (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-400">
-                    Document problems you ran into and how you solved them.
+                    {task.status === "completed"
+                      ? "This task is complete. Learnings are saved to your global library."
+                      : "When you are finished, mark the task complete and capture final learnings."}
                   </p>
-                  {(task.issues ?? []).length === 0 ? (
-                    <p className="text-sm text-slate-500">No issues logged yet.</p>
+                  {task.status === "completed" ? (
+                    <div className="space-y-3">
+                      <p className="text-slate-200">Status: Completed</p>
+                      <Link href="/learnings" className="inline-block text-emerald-400 hover:underline text-sm">
+                        View all learnings →
+                      </Link>
+                    </div>
                   ) : (
-                    <ul className="space-y-4">
-                      {(task.issues ?? []).map((issue) => (
-                        <li
-                          key={issue.id}
-                          className="border border-slate-700 rounded-lg p-4 bg-slate-800/50 space-y-2"
-                        >
-                          <p className="text-sm font-medium text-slate-300">What went wrong</p>
-                          <p className="text-sm text-slate-200 whitespace-pre-wrap">
-                            {issue.what_went_wrong}
-                          </p>
-                          <p className="text-sm font-medium text-slate-300 pt-2">How it was solved</p>
-                          <p className="text-sm text-slate-200 whitespace-pre-wrap">
-                            {issue.how_solved}
-                          </p>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-400 hover:text-red-300 mt-2"
-                            onClick={async () => {
-                              const next = (task.issues ?? []).filter((i) => i.id !== issue.id);
-                              setIsSavingIssues(true);
-                              try {
-                                await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ issues: next }),
-                                });
-                                await loadTask();
-                              } finally {
-                                setIsSavingIssues(false);
-                              }
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
+                    task.status !== "draft" && (
+                      <Button
+                        variant="outline"
+                        className="border-emerald-600 text-emerald-200 hover:bg-emerald-900/40"
+                        onClick={() => setCompleteModalOpen(true)}
+                      >
+                        ✓ Mark Complete
+                      </Button>
+                    )
                   )}
-                  <div className="border border-slate-700 rounded-lg p-4 bg-slate-800/30 space-y-3">
-                    <p className="text-sm font-medium text-slate-300">Add issue</p>
-                    <div>
-                      <label className="text-xs text-slate-500">What went wrong</label>
-                      <Textarea
-                        value={newIssueWrong}
-                        onChange={(e) => setNewIssueWrong(e.target.value)}
-                        placeholder="Describe the problem..."
-                        className="mt-1 min-h-[80px] bg-slate-800 border-slate-700 text-slate-100"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">How you solved it</label>
-                      <Textarea
-                        value={newIssueSolved}
-                        onChange={(e) => setNewIssueSolved(e.target.value)}
-                        placeholder="Describe the solution..."
-                        className="mt-1 min-h-[80px] bg-slate-800 border-slate-700 text-slate-100"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-slate-100"
-                      disabled={!newIssueWrong.trim() || !newIssueSolved.trim() || isSavingIssues}
-                      onClick={async () => {
-                        const newIssue: TaskIssue = {
-                          id: `issue_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-                          what_went_wrong: newIssueWrong.trim(),
-                          how_solved: newIssueSolved.trim(),
-                          created_at: new Date().toISOString(),
-                        };
-                        const next = [...(task.issues ?? []), newIssue];
-                        setIsSavingIssues(true);
-                        try {
-                          await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ issues: next }),
-                          });
-                          await loadTask();
-                          setNewIssueWrong("");
-                          setNewIssueSolved("");
-                        } finally {
-                          setIsSavingIssues(false);
-                        }
-                      }}
-                    >
-                      {isSavingIssues ? "Saving…" : "Add issue"}
-                    </Button>
-                  </div>
                 </div>
               )}
+              <div className="flex flex-wrap justify-between gap-3 pt-6 mt-2 border-t border-slate-800">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={currentStep <= 1}
+                  onClick={() => setCurrentStep((s) => Math.max(1, s - 1))}
+                >
+                  ← Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={currentStep >= 4}
+                  onClick={() => setCurrentStep((s) => Math.min(4, s + 1))}
+                >
+                  Next →
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1291,14 +1245,15 @@ export default function TaskDetailPage() {
             });
             await loadTask();
             setCompleteModalOpen(false);
-            alert("Task completed! Learnings saved.");
+            setTimeout(() => {
+              router.push("/learnings");
+            }, 1500);
           } catch (error) {
             console.error("Failed to complete task:", error);
-            alert("Failed to save learnings. Please try again.");
           }
         }}
       />
-      {learningModalOpen && (
+      {addLearningModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-4">
           <div className="bg-gray-800 p-6 rounded-lg w-[min(92vw,640px)] max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">Add to Learning</h3>
@@ -1418,7 +1373,7 @@ export default function TaskDetailPage() {
                   type="button"
                   variant="outline"
                   className="border-slate-600 text-slate-100"
-                  onClick={() => setLearningModalOpen(false)}
+                  onClick={() => setAddLearningModalOpen(false)}
                   disabled={isAddingLearning}
                 >
                   Cancel
@@ -1438,126 +1393,22 @@ export default function TaskDetailPage() {
           </div>
         </div>
       )}
-      {editingLearning && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded-lg w-[min(92vw,560px)]">
-            <h3 className="text-lg font-bold mb-4">Edit learning</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-slate-300">Learning Content</label>
-                <Textarea
-                  value={learningEditContent}
-                  onChange={(e) => setLearningEditContent(e.target.value)}
-                  className="mt-1 min-h-[140px] bg-slate-900 border-slate-700 whitespace-pre-wrap"
-                  placeholder="Write the key learning..."
-                />
-              </div>
-              <div>
-                <label className="text-sm text-slate-300">Category (optional)</label>
-                <Input
-                  value={learningEditCategory}
-                  onChange={(e) => setLearningEditCategory(e.target.value)}
-                  className="mt-1 bg-slate-900 border-slate-700"
-                  placeholder="e.g. API Design"
-                />
-              </div>
-              <div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-400 hover:text-slate-200"
-                  onClick={() => learningEditImageInputRef.current?.click()}
-                >
-                  <ImagePlus className="w-4 h-4 mr-1 inline" />
-                  Add images
-                </Button>
-                <input
-                  ref={learningEditImageInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  multiple
-                  className="hidden"
-                  onChange={async (e) => {
-                    const files = e.target.files;
-                    if (!files?.length) return;
-                    const urls = await Promise.all(Array.from(files).map(fileToDataUrl));
-                    setLearningEditAttachments((prev) => [...prev, ...urls]);
-                    e.target.value = "";
-                  }}
-                />
-                {learningEditAttachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {learningEditAttachments.map((dataUrl, i) => (
-                      <div key={i} className="relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element -- data URL from user upload */}
-                        <img src={dataUrl} alt="" className="h-14 w-14 rounded object-cover border border-slate-600" />
-                        <button
-                          type="button"
-                          aria-label="Remove"
-                          className="absolute -top-0.5 -right-0.5 rounded bg-black/80 text-white w-5 h-5 flex items-center justify-center"
-                          onClick={() => setLearningEditAttachments((prev) => prev.filter((_, j) => j !== i))}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2 justify-end pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-slate-600 text-slate-100"
-                  onClick={() => {
-                    setEditingLearning(null);
-                    setLearningEditContent("");
-                    setLearningEditCategory("");
-                  }}
-                  disabled={isSavingLearningEdit}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => void saveLearningEdit()}
-                  disabled={isSavingLearningEdit || !learningEditContent.trim()}
-                >
-                  {isSavingLearningEdit ? "Saving..." : "Save"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {deleteLearningId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded-lg w-[min(92vw,400px)]">
-            <h3 className="text-lg font-bold mb-2">Delete learning?</h3>
-            <p className="text-sm text-slate-300 mb-4">
-              This learning note will be removed. This cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                className="border-slate-600 text-slate-100"
-                onClick={() => setDeleteLearningId(null)}
-                disabled={isDeletingLearning}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => void confirmDeleteLearning()}
-                disabled={isDeletingLearning}
-              >
-                {isDeletingLearning ? "Deleting..." : "Delete"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LearningModal
+        open={detailLearningModalOpen}
+        learning={detailLearning}
+        onClose={() => {
+          setDetailLearningModalOpen(false);
+          setDetailLearning(null);
+        }}
+        onSaved={async () => {
+          await loadTask();
+          if (taskId) {
+            const res = await fetch(`/api/learnings?taskId=${encodeURIComponent(taskId)}`);
+            const json = (await res.json()) as { success: boolean; data?: StandaloneLearning[] };
+            if (json.success && json.data) setStandaloneLearnings(json.data);
+          }
+        }}
+      />
       {showCopyToast && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-slide-in">
           <Check className="w-5 h-5" />

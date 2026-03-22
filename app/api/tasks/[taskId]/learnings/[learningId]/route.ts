@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok, err } from "@/lib/api-types";
 import {
-  deleteTaskLearning,
-  readTask,
-  updateTaskLearning,
-} from "@/lib/storage/tasks";
+  deleteLearningFromTask,
+  readLearning,
+  updateLearningOnTask,
+} from "@/lib/storage/learnings";
+import { readTask } from "@/lib/storage/tasks";
 
 type RouteParams = { params: Promise<{ taskId: string; learningId: string }> };
 
@@ -21,20 +22,33 @@ export async function PATCH(
   if (!learning) {
     return NextResponse.json(err("Learning not found"), { status: 404 });
   }
+  const standalone = await readLearning(learningId);
+  if (!standalone) {
+    return NextResponse.json(err("Learning not found"), { status: 404 });
+  }
 
-  const body = (await request.json()) as { content?: unknown; category?: unknown; attachments?: unknown };
-  const updates: { content?: string; category?: string; attachments?: string[] } = {};
+  const body = (await request.json()) as {
+    content?: unknown;
+    category?: unknown;
+    attachments?: unknown;
+    title?: unknown;
+  };
+  const updates: Parameters<typeof updateLearningOnTask>[2] = {};
   if (typeof body.content === "string") updates.content = body.content.trim();
-  if (body.category !== undefined)
+  if (body.category !== undefined) {
     updates.category =
       typeof body.category === "string" && body.category.trim().length > 0
         ? body.category.trim()
         : "";
+  }
   if (Array.isArray(body.attachments) && body.attachments.every((s) => typeof s === "string")) {
     updates.attachments = body.attachments as string[];
   }
+  if (body.title !== undefined) {
+    updates.title = typeof body.title === "string" ? body.title : undefined;
+  }
 
-  const updated = await updateTaskLearning(taskId, learningId, updates);
+  const updated = await updateLearningOnTask(taskId, learningId, updates);
   if (!updated) {
     return NextResponse.json(err("Failed to update learning"), { status: 500 });
   }
@@ -55,7 +69,7 @@ export async function DELETE(
     return NextResponse.json(err("Learning not found"), { status: 404 });
   }
 
-  const updated = await deleteTaskLearning(taskId, learningId);
+  const updated = await deleteLearningFromTask(taskId, learningId);
   if (!updated) {
     return NextResponse.json(err("Failed to delete learning"), { status: 500 });
   }

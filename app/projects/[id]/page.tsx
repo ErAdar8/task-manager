@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { generateGenericRepoScanPrompt } from "@/lib/prompts";
+import { generateGenericRepoScanPrompt } from "@/lib/cursor-prompts";
 import { NewTaskModal } from "@/components/project/new-task-modal";
 import { DeleteConfirmation, type DeleteConfirmationData } from "@/components/dialogs/delete-confirmation";
 import type { Project } from "@/schemas/projects";

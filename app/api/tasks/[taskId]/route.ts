@@ -59,6 +59,9 @@ export async function PATCH(
   if (Array.isArray(body.task_notes_images) && body.task_notes_images.every((s: unknown) => typeof s === "string")) {
     updates.task_notes_images = body.task_notes_images as string[];
   }
+  if (body.analysis_mode === "execute" || body.analysis_mode === "understand") {
+    updates.analysis_mode = body.analysis_mode;
+  }
   const updated = await updateTask(taskId, updates);
   if (!updated) {
     return NextResponse.json(err("Task not found"), { status: 404 });

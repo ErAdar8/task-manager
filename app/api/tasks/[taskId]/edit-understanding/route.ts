@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok, err } from "@/lib/api-types";
-import { regenerateTaskUnderstanding } from "@/lib/claude/task-manager";
-import { readTask, setTaskUnderstanding, updateTask } from "@/lib/storage/tasks";
+import { performAnalyzeUnderstand } from "@/lib/analysis/perform-analyze";
+import {
+  mapUnderstandJsonToKeyConcepts,
+  mapUnderstandJsonToUnderstanding,
+} from "@/lib/map-analysis-to-task";
+import { readTask, updateTask } from "@/lib/storage/tasks";
 
 type RouteParams = { params: Promise<{ taskId: string }> };
 
@@ -29,20 +33,23 @@ export async function PATCH(
       if (typeof body.regeneration_notes !== "string" || !body.regeneration_notes.trim()) {
         return NextResponse.json(err("regeneration_notes required"), { status: 400 });
       }
-      const regenerated = await regenerateTaskUnderstanding(
-        task.id,
-        task.raw_input,
-        task.understanding,
-        body.regeneration_notes
-      );
-      await setTaskUnderstanding(task.id, regenerated);
-      const updated = await updateTask(task.id, {
-        user_edited_understanding: null,
-        understanding_approved: false,
-        architecture: null,
-        status: "understanding",
+      const raw = await performAnalyzeUnderstand(task.id, {
+        userQuestions: body.regeneration_notes.trim(),
       });
-      return NextResponse.json(ok(updated?.understanding ?? regenerated));
+      const understanding = mapUnderstandJsonToUnderstanding(raw);
+      const key_concepts = mapUnderstandJsonToKeyConcepts(raw);
+      const updated = await updateTask(task.id, {
+        understanding,
+        key_concepts,
+        canonical_understand_result: raw,
+        last_analysis_kind: "understand",
+        user_edited_understanding: null,
+        understanding_approved: true,
+        architecture: null,
+        status: "ready",
+        analysis_error: null,
+      });
+      return NextResponse.json(ok(updated?.understanding ?? understanding));
     }
 
     if (typeof body.edited_text !== "string" || !body.edited_text.trim()) {

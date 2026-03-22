@@ -1,1 +1,0 @@
-the node rejected the block due to invalid witness commitment

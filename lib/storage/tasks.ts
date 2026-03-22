@@ -5,9 +5,14 @@ import {
   taskSchema,
   taskUnderstandingSchema,
   type CreateTaskInput,
-  type Learning,
   type Task,
 } from "@/schemas/tasks";
+import {
+  addTaskToIndex,
+  readProjectTasksIndex,
+  rebuildProjectTasksIndex,
+  removeTaskFromIndex,
+} from "@/lib/storage/index-utils";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const TASKS_DIR = path.join(DATA_DIR, "tasks");
@@ -18,6 +23,23 @@ async function ensureTasksDir(): Promise<void> {
 
 function taskPath(taskId: string): string {
   return path.join(TASKS_DIR, `${taskId}.json`);
+}
+
+async function scanAllTasksForIndex(): Promise<Array<{ project_id: string; id: string }>> {
+  await ensureTasksDir();
+  const files = await fs.readdir(TASKS_DIR);
+  const rows: Array<{ project_id: string; id: string }> = [];
+  for (const file of files) {
+    if (!file.endsWith(".json")) continue;
+    const task = await readTask(file.replace(".json", ""));
+    if (task) rows.push({ project_id: task.project_id, id: task.id });
+  }
+  return rows;
+}
+
+export async function rebuildProjectTasksIndexFromDisk(): Promise<void> {
+  const rows = await scanAllTasksForIndex();
+  await rebuildProjectTasksIndex(async () => rows);
 }
 
 export async function readTask(taskId: string): Promise<Task | null> {
@@ -41,6 +63,17 @@ export async function writeTask(task: Task): Promise<void> {
 export async function listTasksByProject(projectId: string): Promise<Task[]> {
   try {
     await ensureTasksDir();
+    const index = await readProjectTasksIndex();
+    const ids = index?.[projectId];
+    if (ids && ids.length > 0) {
+      const tasks: Task[] = [];
+      for (const id of ids) {
+        const task = await readTask(id);
+        if (task && task.project_id === projectId) tasks.push(task);
+      }
+      tasks.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      return tasks;
+    }
     const files = await fs.readdir(TASKS_DIR);
     const tasks: Task[] = [];
     for (const file of files) {
@@ -51,6 +84,7 @@ export async function listTasksByProject(projectId: string): Promise<Task[]> {
       }
     }
     tasks.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    await rebuildProjectTasksIndexFromDisk();
     return tasks;
   } catch {
     return [];
@@ -85,8 +119,13 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     updated_at: now,
     completed_at: null,
     analysis_error: null,
+    canonical_execute_result: null,
+    canonical_understand_result: null,
+    last_analysis_kind: null,
+    analysis_mode: input.analysis_mode,
   };
   await writeTask(task);
+  await addTaskToIndex(task.project_id, task.id);
   return task;
 }
 
@@ -117,75 +156,14 @@ export async function setTaskArchitecture(taskId: string, architecture: unknown)
   return updateTask(taskId, { architecture: parsed });
 }
 
-export async function setTaskLearnings(taskId: string, learnings: Omit<Learning, "id" | "created_at">[]): Promise<Task | null> {
-  const task = await readTask(taskId);
-  if (!task) return null;
-  const now = new Date().toISOString();
-  const normalized: Learning[] = learnings.map((learning) => ({
-    id: `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-    content: learning.content,
-    category: learning.category,
-    attachments: learning.attachments ?? [],
-    created_at: now,
-  }));
-  return updateTask(taskId, {
-    status: "completed",
-    completed_at: now,
-    learnings: [...task.learnings, ...normalized],
-  });
-}
-
-export async function addTaskLearning(
-  taskId: string,
-  learning: Omit<Learning, "id" | "created_at">
-): Promise<Task | null> {
-  const task = await readTask(taskId);
-  if (!task) return null;
-  const now = new Date().toISOString();
-  const appended: Learning = {
-    id: `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-    content: learning.content,
-    category: learning.category,
-    attachments: learning.attachments ?? [],
-    created_at: now,
-  };
-  return updateTask(taskId, {
-    learnings: [...task.learnings, appended],
-  });
-}
-
-export async function updateTaskLearning(
-  taskId: string,
-  learningId: string,
-  updates: { content?: string; category?: string; attachments?: string[] }
-): Promise<Task | null> {
-  const task = await readTask(taskId);
-  if (!task) return null;
-  const learnings = task.learnings.map((l) =>
-    l.id === learningId
-      ? {
-          ...l,
-          ...(typeof updates.content === "string" && { content: updates.content }),
-          ...(updates.category !== undefined && { category: updates.category }),
-          ...(Array.isArray(updates.attachments) && { attachments: updates.attachments }),
-        }
-      : l
-  );
-  return updateTask(taskId, { learnings });
-}
-
-export async function deleteTaskLearning(
-  taskId: string,
-  learningId: string
-): Promise<Task | null> {
-  const task = await readTask(taskId);
-  if (!task) return null;
-  const learnings = task.learnings.filter((l) => l.id !== learningId);
-  return updateTask(taskId, { learnings });
-}
-
 export async function deleteTask(taskId: string): Promise<boolean> {
   try {
+    const task = await readTask(taskId);
+    if (task) {
+      const { removeAllStandaloneForTask } = await import("@/lib/storage/learnings");
+      await removeAllStandaloneForTask(task.id);
+      await removeTaskFromIndex(task.project_id, task.id);
+    }
     await fs.unlink(taskPath(taskId));
     return true;
   } catch {

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:learnings": "npx --yes tsx scripts/migrate-learnings-standalone.ts",
+    "rebuild:indexes": "npx --yes tsx scripts/rebuild-indexes.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

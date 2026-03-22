@@ -99,6 +99,9 @@ export function Sidebar({
           <Link href="/notes" className="text-sm text-slate-300 hover:text-white">
             Notes
           </Link>
+          <Link href="/learnings" className="text-sm text-slate-300 hover:text-white">
+            Learnings
+          </Link>
         </div>
       </div>
       <ScrollArea className="flex-1 p-2">

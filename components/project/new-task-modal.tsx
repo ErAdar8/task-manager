@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { X, ImagePlus, ClipboardCopy } from "lucide-react";
-import { generateTaskAwareRepoScanPromptFromDraft } from "@/lib/prompts";
+import { generateTaskAwareRepoScanPromptFromDraft } from "@/lib/cursor-prompts";
 import type { Task } from "@/schemas/tasks";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -37,11 +37,12 @@ export function NewTaskModal({
   const [cardDescriptionImages, setCardDescriptionImages] = useState<string[]>([]);
   const [cursorRepoScan, setCursorRepoScan] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveMode, setSaveMode] = useState<"draft" | "analyze">("analyze");
+  const [saveMode, setSaveMode] = useState<"draft" | "create">("create");
+  const [analysisMode, setAnalysisMode] = useState<"execute" | "understand">("execute");
   const [copyToast, setCopyToast] = useState(false);
   const cardImageInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async (mode: "draft" | "analyze") => {
+  const handleSubmit = async (mode: "draft" | "create") => {
     if (!title.trim() || !cardDescription.trim()) return;
     setSaving(true);
     setSaveMode(mode);
@@ -54,7 +55,7 @@ export function NewTaskModal({
           title: title.trim(),
           raw_input: cardDescription.trim(),
           cursor_repo_scan: cursorRepoScan.trim() || undefined,
-          analyze: mode === "analyze",
+          analysis_mode: analysisMode,
           ...(cardDescriptionImages.length > 0 && { card_description_images: cardDescriptionImages }),
         }),
       });
@@ -112,7 +113,7 @@ export function NewTaskModal({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (title.trim() && cardDescription.trim()) void handleSubmit("analyze");
+              if (title.trim() && cardDescription.trim()) void handleSubmit("create");
             }}
             className="space-y-4"
           >
@@ -227,6 +228,42 @@ export function NewTaskModal({
               className="mt-1.5 min-h-[80px] bg-slate-800 border-slate-600 text-slate-100 placeholder:text-slate-500"
             />
           </div>
+          <div className="space-y-2">
+            <Label className="text-slate-300">Analysis flow</Label>
+            <p className="text-xs text-slate-500">
+              Choose how Claude should analyze this task after you run analysis on the task page.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAnalysisMode("execute")}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  analysisMode === "execute"
+                    ? "border-emerald-500/70 bg-emerald-950/30 ring-1 ring-emerald-500/40"
+                    : "border-slate-600 bg-slate-800/50 hover:border-slate-500"
+                }`}
+              >
+                <span className="text-sm font-medium text-emerald-300">Understand &amp; Execute</span>
+                <p className="text-xs text-slate-400 mt-1">
+                  You already understand the task — execution plan and topic cards (Opus).
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAnalysisMode("understand")}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  analysisMode === "understand"
+                    ? "border-violet-500/70 bg-violet-950/30 ring-1 ring-violet-500/40"
+                    : "border-slate-600 bg-slate-800/50 hover:border-slate-500"
+                }`}
+              >
+                <span className="text-sm font-medium text-violet-300">Deep Understanding</span>
+                <p className="text-xs text-slate-400 mt-1">
+                  Learn the domain first — concepts, reading order, pitfalls (Sonnet).
+                </p>
+              </button>
+            </div>
+          </div>
           <div className="flex gap-2 pt-2 justify-end border-t border-slate-700">
             <Button
               type="button"
@@ -250,7 +287,7 @@ export function NewTaskModal({
               disabled={saving || !title.trim() || !cardDescription.trim()}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {saving && saveMode === "analyze" ? "Creating…" : "Analyze Task"}
+              {saving && saveMode === "create" ? "Creating…" : "Create task"}
             </Button>
           </div>
           </form>

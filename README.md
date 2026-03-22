@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Task Helper
 
-## Getting Started
+Local Next.js app for planning and tracking development tasks with Claude-assisted analysis.
 
-First, run the development server:
+## Prompt system
+
+Claude uses two canonical prompt sources at the repository root:
+
+- `understanding-execution.md` — **Execute** flow: break work into topic cards and paste-ready mini prompts.
+- `understanding-learning.md` — **Deep understanding** flow: teach concepts, reading order, and pitfalls before implementation.
+
+These files are read at runtime (with caching on file mtime) by:
+
+- `lib/prompts/analyze-execute.ts` → `GET`/`POST` handlers use `/api/tasks/[taskId]/analyze-execute`
+- `lib/prompts/analyze-understand.ts` → `/api/tasks/[taskId]/analyze-understand`
+
+Edit the `.md` files to change behavior; the next API call picks up changes after the file is saved.
+
+Shared HTTP logic lives in `lib/task-analyze-claude.ts`. Cursor “copy this prompt” helpers for repo scans are in `lib/cursor-prompts.ts` (not used as Claude system prompts).
+
+## Environment
+
+- `ANTHROPIC_API_KEY` — required for analysis routes  
+- Optional: `ANTHROPIC_MODEL_OVERRIDE` — if set, used for both flows instead of Opus (execute) / Sonnet (understand) defaults in `lib/analysis/resolve-model.ts`
+
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```

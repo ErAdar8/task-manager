@@ -29,13 +29,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       (body as { card_description_images: string[] }).card_description_images.every((s) => typeof s === "string")
         ? (body as { card_description_images: string[] }).card_description_images
         : undefined;
-    const analyze =
-      typeof body === "object" &&
-      body !== null &&
-      "analyze" in body &&
-      typeof (body as { analyze?: unknown }).analyze === "boolean"
-        ? ((body as { analyze?: boolean }).analyze ?? true)
-        : true;
     const cursorRepoScan =
       typeof body === "object" &&
       body !== null &&
@@ -48,12 +41,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...parsed.data,
       ...(cardDescriptionImages != null && { card_description_images: cardDescriptionImages }),
     });
-    const updates: { cursor_repo_scan?: string; status?: "draft" | "analyzing" } = {};
+    const updates: { cursor_repo_scan?: string } = {};
     if (cursorRepoScan.trim().length > 0) {
       updates.cursor_repo_scan = cursorRepoScan;
-    }
-    if (analyze) {
-      updates.status = "analyzing";
     }
     const updatedTask =
       Object.keys(updates).length > 0

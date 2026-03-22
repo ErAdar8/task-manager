@@ -65,6 +65,8 @@ export type TaskArchitecture = z.infer<typeof taskArchitectureSchema>;
 export const learningSchema = z.object({
   id: z.string(),
   content: z.string(),
+  /** Optional headline; synced from standalone store when present */
+  title: z.string().optional(),
   category: z.string().optional(),
   /** Data URLs (data:image/...) for attached images */
   attachments: z.array(z.string()).default([]),
@@ -101,6 +103,13 @@ export const taskSchema = z.object({
   completed_at: z.string().nullable().default(null),
   /** Set when analysis fails; cleared on next successful analysis. */
   analysis_error: z.string().nullable().default(null),
+  /** Raw JSON from understanding-execution.md flow (canonical execute analysis). */
+  canonical_execute_result: z.record(z.string(), z.unknown()).nullable().default(null),
+  /** Raw JSON from understanding-learning.md flow (deep understanding). */
+  canonical_understand_result: z.record(z.string(), z.unknown()).nullable().default(null),
+  last_analysis_kind: z.enum(["execute", "understand"]).nullable().default(null),
+  /** Preferred analysis flow chosen at creation (or updated on re-analyze). */
+  analysis_mode: z.enum(["execute", "understand"]).optional(),
 });
 export type Task = z.infer<typeof taskSchema>;
 
@@ -112,5 +121,6 @@ export const createTaskInputSchema = z.object({
   cursor_repo_scan: z.string().optional(),
   /** Data URLs for images attached to the card description */
   card_description_images: z.array(z.string()).optional(),
+  analysis_mode: z.enum(["execute", "understand"]).optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;

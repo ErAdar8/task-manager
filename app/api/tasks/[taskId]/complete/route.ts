@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok, err } from "@/lib/api-types";
-import { readTask, setTaskLearnings } from "@/lib/storage/tasks";
+import { completeTaskWithLearnings } from "@/lib/storage/learnings";
+import { readTask } from "@/lib/storage/tasks";
 import { syncProjectTaskCounts } from "@/lib/storage/projects";
 
 type RouteParams = { params: Promise<{ taskId: string }> };
@@ -30,7 +31,7 @@ export async function POST(
         }))
     : [];
 
-  const updated = await setTaskLearnings(taskId, normalized);
+  const updated = await completeTaskWithLearnings(taskId, normalized);
   if (!updated) {
     return NextResponse.json(err("Failed to complete task"), { status: 500 });
   }
