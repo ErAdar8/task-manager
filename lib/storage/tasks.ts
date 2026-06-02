@@ -19,14 +19,13 @@ function taskToRow(task: Partial<Task>): Record<string, unknown> {
 }
 
 async function fetchTaskLearningsCache(taskId: string) {
-  // Lazy import to avoid circular dependency
   const { listLearningsByTask, standaloneToTaskCache } = await import("@/lib/storage/learnings");
   const standalones = await listLearningsByTask(taskId);
   return standalones.map(standaloneToTaskCache);
 }
 
-function rowToTask(row: Record<string, unknown>, learnings: Task["learnings"] = []): Task {
-  return taskSchema.parse({
+function normaliseRow(row: Record<string, unknown>, learnings: Task["learnings"] = []) {
+  return {
     ...row,
     raw_input: row.raw_input ?? "",
     card_description_images: row.card_description_images ?? [],
@@ -44,15 +43,25 @@ function rowToTask(row: Record<string, unknown>, learnings: Task["learnings"] = 
     analysis_error: row.analysis_error ?? null,
     last_analysis_kind: row.last_analysis_kind ?? null,
     analysis_partial: row.analysis_partial ?? false,
-  });
+    // null → undefined so optional fields pass Zod
+    analysis_mode: row.analysis_mode ?? undefined,
+  };
+}
+
+function rowToTask(row: Record<string, unknown>, learnings: Task["learnings"] = []): Task | null {
+  const result = taskSchema.safeParse(normaliseRow(row, learnings));
+  if (!result.success) {
+    console.error("[tasks] parse error for", row.id, result.error.issues[0]);
+    return null;
+  }
+  return result.data;
 }
 
 export async function readTask(taskId: string): Promise<Task | null> {
   const { data, error } = await db().from("tasks").select("*").eq("id", taskId).single();
   if (error || !data) return null;
   const learnings = await fetchTaskLearningsCache(taskId);
-  const result = taskSchema.safeParse(rowToTask(data as Record<string, unknown>, learnings));
-  return result.success ? result.data : null;
+  return rowToTask(data as Record<string, unknown>, learnings);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -65,7 +74,12 @@ export async function listTasksByProject(projectId: string): Promise<Task[]> {
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
-  return data.map((r) => rowToTask(r as Record<string, unknown>));
+  const tasks: Task[] = [];
+  for (const r of data) {
+    const task = rowToTask(r as Record<string, unknown>);
+    if (task) tasks.push(task);
+  }
+  return tasks;
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
@@ -105,7 +119,9 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
   };
   const { data, error } = await db().from("tasks").insert(row).select().single();
   if (error || !data) throw new Error(error?.message ?? "Failed to create task");
-  return rowToTask(data as Record<string, unknown>);
+  const task = rowToTask(data as Record<string, unknown>);
+  if (!task) throw new Error("Failed to parse created task");
+  return task;
 }
 
 export async function updateTask(taskId: string, updates: Partial<Task>): Promise<Task | null> {
