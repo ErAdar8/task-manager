@@ -216,18 +216,6 @@ function learningKey(content: string, category?: string): string {
   return `${content.trim()}::${(category ?? "").trim()}`;
 }
 
-function dedupeLearningsByIdAndContent(existing: Learning[], incoming: Learning[]): Learning[] {
-  const seen = new Set<string>();
-  const out: Learning[] = [];
-  for (const l of [...existing, ...incoming]) {
-    const key = `${l.id}::${learningKey(l.content, l.category)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(l);
-  }
-  return out;
-}
-
 export async function completeTaskWithLearnings(
   taskId: string,
   items: Array<{ content: string; category?: string; attachments?: string[] }>

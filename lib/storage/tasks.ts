@@ -55,6 +55,7 @@ export async function readTask(taskId: string): Promise<Task | null> {
   return result.success ? result.data : null;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function writeTask(_task: Task): Promise<void> {}
 
 export async function listTasksByProject(projectId: string): Promise<Task[]> {

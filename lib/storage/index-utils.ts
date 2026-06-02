@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // Index utilities are no-ops now that data lives in Supabase.
 // Kept so existing imports compile without changes.
 

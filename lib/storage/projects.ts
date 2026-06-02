@@ -92,5 +92,5 @@ export async function syncProjectTaskCounts(projectId: string): Promise<Project 
     });
 }
 
-// kept for compat — no-op in Supabase world
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function writeProjects(_projects: Project[]): Promise<void> {}

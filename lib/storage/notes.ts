@@ -24,6 +24,7 @@ export async function readNote(noteId: string): Promise<GenericNote | null> {
   return rowToNote(data as Record<string, unknown>);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function writeNote(_note: GenericNote): Promise<void> {}
 
 export async function listNotes(userId = "local_user"): Promise<GenericNote[]> {
