@@ -1,6 +1,5 @@
 import { projectSchema, type CreateProjectInput, type Project } from "@/schemas/projects";
 import { db } from "@/lib/storage/db";
-import { deleteTask, listTasksByProject } from "@/lib/storage/tasks";
 
 function rowToProject(row: Record<string, unknown>): Project {
   return projectSchema.parse({
@@ -69,27 +68,39 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string): Promise<boolean> {
-  const tasks = await listTasksByProject(projectId);
-  for (const task of tasks) await deleteTask(task.id);
+  // Get task IDs without parsing full task objects (avoids schema validation errors)
+  const { data: taskRows } = await db()
+    .from("tasks")
+    .select("id")
+    .eq("project_id", projectId);
+
+  if (taskRows && taskRows.length > 0) {
+    const ids = taskRows.map((r) => r.id as string);
+    // Delete learnings attached to these tasks
+    await db().from("learnings").delete().in("source_task_id", ids);
+    // Delete tasks explicitly (cascade would also handle this)
+    await db().from("tasks").delete().in("id", ids);
+  }
+
   const { error } = await db().from("projects").delete().eq("id", projectId);
   return !error;
 }
 
 export async function syncProjectTaskCounts(projectId: string): Promise<Project | null> {
-  const tasks = await listTasksByProject(projectId);
-  const completedTasks = tasks.filter((t) => t.status === "completed").length;
-  return updateProject(projectId, {}) // trigger updated_at
-    .then(async (p) => {
-      if (!p) return null;
-      const { data, error } = await db()
-        .from("projects")
-        .update({ total_tasks: tasks.length, completed_tasks: completedTasks, updated_at: new Date().toISOString() })
-        .eq("id", projectId)
-        .select()
-        .single();
-      if (error || !data) return null;
-      return rowToProject(data as Record<string, unknown>);
-    });
+  const { data: taskRows } = await db()
+    .from("tasks")
+    .select("id, status")
+    .eq("project_id", projectId);
+  const total = taskRows?.length ?? 0;
+  const completed = taskRows?.filter((r) => r.status === "completed").length ?? 0;
+  const { data, error } = await db()
+    .from("projects")
+    .update({ total_tasks: total, completed_tasks: completed, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  return rowToProject(data as Record<string, unknown>);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

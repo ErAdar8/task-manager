@@ -69,6 +69,7 @@ export default function ProjectDetailPage() {
   const [repoScanDraft, setRepoScanDraft] = useState("");
   const [isSavingRepoScan, setIsSavingRepoScan] = useState(false);
   const [repoScanCopyToast, setRepoScanCopyToast] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadProject = useCallback(async (id: string) => {
     const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
@@ -124,11 +125,19 @@ export default function ProjectDetailPage() {
 
   const handleDeleteProject = async () => {
     if (!projectId) return;
-    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
-    if (res.ok) {
-      setShowDeleteModal(false);
-      window.dispatchEvent(new Event("projects-updated"));
-      router.push("/projects");
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+      if (res.ok) {
+        setShowDeleteModal(false);
+        window.dispatchEvent(new Event("projects-updated"));
+        router.push("/projects");
+      } else {
+        const json = (await res.json()) as { error?: string };
+        setDeleteError(json.error ?? `Error ${res.status}`);
+      }
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Unknown error");
     }
   };
 
@@ -439,6 +448,9 @@ export default function ProjectDetailPage() {
               This will permanently delete &quot;{project.name}&quot; and all {project.total_tasks} tasks.
               This cannot be undone.
             </p>
+            {deleteError && (
+              <p className="mb-3 text-sm text-red-400 bg-red-900/30 rounded p-2">{deleteError}</p>
+            )}
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => {
