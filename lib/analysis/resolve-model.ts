@@ -1,7 +1,14 @@
-export type AnalyzeMode = "execute" | "understand";
+export type AnalyzeMode =
+  | "execute"
+  | "understand"
+  | "testing_understand"
+  | "qa_kalk"
+  | "qa_general";
 
 const DEFAULT_EXECUTE_MODEL = "claude-opus-4-6";
-const DEFAULT_UNDERSTAND_MODEL = "claude-sonnet-4-5-20250514";
+/** Deep understanding + QA test analysis — Sonnet on the Messages API. */
+const DEFAULT_UNDERSTAND_MODEL = "claude-sonnet-4-6";
+const DEFAULT_QA_MODEL = DEFAULT_UNDERSTAND_MODEL;
 
 /**
  * Resolves the Anthropic model for a given analysis flow.
@@ -10,6 +17,7 @@ const DEFAULT_UNDERSTAND_MODEL = "claude-sonnet-4-5-20250514";
 export function resolveModel(mode: AnalyzeMode): string {
   const override = process.env.ANTHROPIC_MODEL_OVERRIDE?.trim();
   if (override) return override;
-  if (mode === "execute") return DEFAULT_EXECUTE_MODEL;
-  return DEFAULT_UNDERSTAND_MODEL;
+  if (mode === "understand") return DEFAULT_UNDERSTAND_MODEL;
+  if (mode === "qa_kalk" || mode === "qa_general") return DEFAULT_QA_MODEL;
+  return DEFAULT_EXECUTE_MODEL;
 }

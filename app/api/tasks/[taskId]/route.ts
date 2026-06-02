@@ -59,8 +59,17 @@ export async function PATCH(
   if (Array.isArray(body.task_notes_images) && body.task_notes_images.every((s: unknown) => typeof s === "string")) {
     updates.task_notes_images = body.task_notes_images as string[];
   }
-  if (body.analysis_mode === "execute" || body.analysis_mode === "understand") {
+  if (
+    body.analysis_mode === "execute" ||
+    body.analysis_mode === "understand" ||
+    body.analysis_mode === "testing_understand" ||
+    body.analysis_mode === "qa_kalk" ||
+    body.analysis_mode === "qa_general"
+  ) {
     updates.analysis_mode = body.analysis_mode;
+  }
+  if (typeof body.analysis_partial === "boolean") {
+    updates.analysis_partial = body.analysis_partial;
   }
   const updated = await updateTask(taskId, updates);
   if (!updated) {

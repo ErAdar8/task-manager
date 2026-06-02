@@ -1,31 +1,49 @@
-import { promises as fs } from "fs";
-import path from "path";
 import type { Learning, Task } from "@/schemas/tasks";
 import {
   standaloneLearningSchema,
   type CreateStandaloneLearningInput,
   type StandaloneLearning,
 } from "@/schemas/learnings";
+import { db } from "@/lib/storage/db";
 import { getProject } from "@/lib/storage/projects";
-import {
-  addLearningToListIndex,
-  readLearningsListIndex,
-  rebuildLearningsIndex,
-  removeLearningFromListIndex,
-  writeLearningsListIndex,
-} from "@/lib/storage/index-utils";
 import { createNote, deleteNote, readNote } from "@/lib/storage/notes";
 import { readTask, updateTask } from "@/lib/storage/tasks";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const LEARNINGS_DIR = path.join(DATA_DIR, "learnings");
-
-async function ensureLearningsDir(): Promise<void> {
-  await fs.mkdir(LEARNINGS_DIR, { recursive: true });
+function rowToStandalone(row: Record<string, unknown>): StandaloneLearning {
+  return standaloneLearningSchema.parse({
+    id: row.id,
+    content: row.content,
+    title: row.title ?? undefined,
+    category: row.category ?? undefined,
+    attachments: row.attachments ?? [],
+    source: {
+      type: row.source_type,
+      taskId: row.source_task_id ?? undefined,
+      taskTitle: row.source_task_title ?? undefined,
+      projectId: row.source_project_id ?? undefined,
+      projectName: row.source_project_name ?? undefined,
+    },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
 }
 
-function learningPath(id: string): string {
-  return path.join(LEARNINGS_DIR, `${id}.json`);
+function standaloneToRow(s: StandaloneLearning): Record<string, unknown> {
+  return {
+    id: s.id,
+    user_id: "local_user",
+    title: s.title ?? null,
+    content: s.content,
+    category: s.category ?? null,
+    attachments: s.attachments ?? [],
+    source_type: s.source.type,
+    source_task_id: s.source.taskId ?? null,
+    source_task_title: s.source.taskTitle ?? null,
+    source_project_id: s.source.projectId ?? null,
+    source_project_name: s.source.projectName ?? null,
+    created_at: s.createdAt,
+    updated_at: s.updatedAt,
+  };
 }
 
 export function standaloneToTaskCache(s: StandaloneLearning): Learning {
@@ -40,73 +58,59 @@ export function standaloneToTaskCache(s: StandaloneLearning): Learning {
 }
 
 export async function readLearning(learningId: string): Promise<StandaloneLearning | null> {
-  try {
-    await ensureLearningsDir();
-    const raw = await fs.readFile(learningPath(learningId), "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    const result = standaloneLearningSchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
+  const { data, error } = await db().from("learnings").select("*").eq("id", learningId).single();
+  if (error || !data) return null;
+  return rowToStandalone(data as Record<string, unknown>);
 }
 
 export async function writeLearning(learning: StandaloneLearning): Promise<void> {
-  await ensureLearningsDir();
-  standaloneLearningSchema.parse(learning);
-  await fs.writeFile(learningPath(learning.id), JSON.stringify(learning, null, 2), "utf-8");
-}
-
-export async function rebuildLearningsIndexFromDisk(): Promise<void> {
-  const ids = await scanAllLearningIds();
-  await rebuildLearningsIndex(async () => ids);
-}
-
-async function scanAllLearningIds(): Promise<string[]> {
-  try {
-    await ensureLearningsDir();
-    const files = await fs.readdir(LEARNINGS_DIR);
-    return files.filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
-  } catch {
-    return [];
-  }
+  const row = standaloneToRow(learning);
+  await db().from("learnings").upsert(row);
 }
 
 export async function listAllLearnings(): Promise<StandaloneLearning[]> {
-  const index = await readLearningsListIndex();
-  const ids = index?.ids?.length ? index.ids : await scanAllLearningIds();
-  if (!index?.ids?.length && ids.length > 0) {
-    await writeLearningsListIndex({ ids });
-  }
-  const out: StandaloneLearning[] = [];
-  for (const id of ids) {
-    const l = await readLearning(id);
-    if (l) out.push(l);
-  }
-  out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return out;
+  const { data, error } = await db()
+    .from("learnings")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToStandalone(r as Record<string, unknown>));
 }
 
 export async function listLearningsByTask(taskId: string): Promise<StandaloneLearning[]> {
-  const all = await listAllLearnings();
-  return all.filter((l) => l.source.type === "task" && l.source.taskId === taskId);
+  const { data, error } = await db()
+    .from("learnings")
+    .select("*")
+    .eq("source_task_id", taskId)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToStandalone(r as Record<string, unknown>));
 }
 
 export async function listLearningsByProject(projectId: string): Promise<StandaloneLearning[]> {
-  const all = await listAllLearnings();
-  return all.filter((l) => l.source.projectId === projectId);
+  const { data, error } = await db()
+    .from("learnings")
+    .select("*")
+    .eq("source_project_id", projectId)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToStandalone(r as Record<string, unknown>));
 }
 
 export async function listGeneralLearnings(): Promise<StandaloneLearning[]> {
-  const all = await listAllLearnings();
-  return all.filter((l) => l.source.type === "general");
+  const { data, error } = await db()
+    .from("learnings")
+    .select("*")
+    .eq("source_type", "general")
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToStandalone(r as Record<string, unknown>));
 }
 
 export async function createLearning(input: CreateStandaloneLearningInput): Promise<StandaloneLearning> {
   const now = new Date().toISOString();
-  const id = `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const learning: StandaloneLearning = {
-    id,
+    id: `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     content: input.content.trim(),
     title: input.title?.trim() || undefined,
     category: input.category?.trim() || undefined,
@@ -115,8 +119,8 @@ export async function createLearning(input: CreateStandaloneLearningInput): Prom
     createdAt: now,
     updatedAt: now,
   };
-  await writeLearning(learning);
-  await addLearningToListIndex(learning.id);
+  const { error } = await db().from("learnings").insert(standaloneToRow(learning));
+  if (error) throw new Error(error.message);
   return learning;
 }
 
@@ -135,42 +139,21 @@ export async function updateLearning(
   };
   standaloneLearningSchema.parse(next);
   await writeLearning(next);
-  const taskId = next.source.taskId;
-  if (taskId && next.source.type === "task") {
-    const task = await readTask(taskId);
-    if (task) {
-      const learnings = task.learnings.map((l) =>
-        l.id === learningId ? standaloneToTaskCache(next) : l
-      );
-      await updateTask(taskId, { learnings });
-    }
-  }
   return next;
 }
 
 export async function deleteLearningFile(learningId: string): Promise<boolean> {
-  try {
-    await fs.unlink(learningPath(learningId));
-    await removeLearningFromListIndex(learningId);
-    return true;
-  } catch {
-    return false;
-  }
+  const { error } = await db().from("learnings").delete().eq("id", learningId);
+  return !error;
 }
 
-/** Remove standalone file and strip from task cache if attached. */
 export async function deleteLearningEverywhere(learningId: string): Promise<boolean> {
-  const s = await readLearning(learningId);
-  if (!s) return false;
-  if (s.source.type === "task" && s.source.taskId) {
-    const task = await readTask(s.source.taskId);
-    if (task) {
-      const learnings = task.learnings.filter((l) => l.id !== learningId);
-      await updateTask(s.source.taskId, { learnings });
-    }
-  }
   await deleteLearningFile(learningId);
   return true;
+}
+
+export async function removeAllStandaloneForTask(taskId: string): Promise<void> {
+  await db().from("learnings").delete().eq("source_task_id", taskId);
 }
 
 export async function addLearningToTask(
@@ -181,9 +164,8 @@ export async function addLearningToTask(
   if (!task) return null;
   const project = await getProject(task.project_id);
   const now = new Date().toISOString();
-  const id = `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const standalone: StandaloneLearning = {
-    id,
+    id: `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     content: input.content.trim(),
     title: input.title?.trim() || undefined,
     category: input.category?.trim() || undefined,
@@ -198,10 +180,10 @@ export async function addLearningToTask(
     createdAt: now,
     updatedAt: now,
   };
-  await writeLearning(standalone);
-  await addLearningToListIndex(standalone.id);
-  const nextLearnings = [...task.learnings, standaloneToTaskCache(standalone)];
-  const updated = await updateTask(taskId, { learnings: nextLearnings });
+  const { error } = await db().from("learnings").insert(standaloneToRow(standalone));
+  if (error) return null;
+  // Touch updated_at on task so callers get a fresh task back
+  const updated = await updateTask(taskId, { updated_at: new Date().toISOString() } as Partial<Task>);
   if (!updated) return null;
   return { task: updated, learning: standalone };
 }
@@ -213,40 +195,21 @@ export async function updateLearningOnTask(
 ): Promise<Task | null> {
   const s = await readLearning(learningId);
   if (!s) return null;
-  const nextStandalone: StandaloneLearning = {
+  const next: StandaloneLearning = {
     ...s,
     content: typeof updates.content === "string" ? updates.content.trim() : s.content,
-    category:
-      updates.category !== undefined
-        ? updates.category.trim() || undefined
-        : s.category,
+    category: updates.category !== undefined ? updates.category.trim() || undefined : s.category,
     attachments: Array.isArray(updates.attachments) ? updates.attachments : s.attachments,
     title: updates.title !== undefined ? updates.title.trim() || undefined : s.title,
     updatedAt: new Date().toISOString(),
   };
-  await writeLearning(nextStandalone);
-  const t = await readTask(taskId);
-  if (!t) return null;
-  const learnings = t.learnings.map((l) =>
-    l.id === learningId ? standaloneToTaskCache(nextStandalone) : l
-  );
-  return updateTask(taskId, { learnings });
+  await writeLearning(next);
+  return updateTask(taskId, { updated_at: new Date().toISOString() } as Partial<Task>);
 }
 
 export async function deleteLearningFromTask(taskId: string, learningId: string): Promise<Task | null> {
-  const task = await readTask(taskId);
-  if (!task) return null;
-  const learnings = task.learnings.filter((l) => l.id !== learningId);
-  await updateTask(taskId, { learnings });
   await deleteLearningFile(learningId);
   return readTask(taskId);
-}
-
-export async function removeAllStandaloneForTask(taskId: string): Promise<void> {
-  const list = await listLearningsByTask(taskId);
-  for (const l of list) {
-    await deleteLearningFile(l.id);
-  }
 }
 
 function learningKey(content: string, category?: string): string {
@@ -274,24 +237,17 @@ export async function completeTaskWithLearnings(
   const now = new Date().toISOString();
   const project = await getProject(task.project_id);
 
+  const existingLearnings = await listLearningsByTask(taskId);
+  const existingKeys = new Set(existingLearnings.map((l) => learningKey(l.content, l.category)));
+
   const seenKeys = new Set<string>();
-  const deduped: typeof items = [];
+  const toInsert: StandaloneLearning[] = [];
   for (const item of items) {
     const key = learningKey(item.content, item.category);
-    if (seenKeys.has(key)) continue;
+    if (seenKeys.has(key) || existingKeys.has(key)) continue;
     seenKeys.add(key);
-    const existsOnTask = task.learnings.some(
-      (m) => learningKey(m.content, m.category) === key
-    );
-    if (existsOnTask) continue;
-    deduped.push(item);
-  }
-
-  const newCache: Learning[] = [];
-  for (const item of deduped) {
-    const id = `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const standalone: StandaloneLearning = {
-      id,
+    toInsert.push({
+      id: `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       content: item.content.trim(),
       category: item.category?.trim() || undefined,
       attachments: item.attachments ?? [],
@@ -304,19 +260,14 @@ export async function completeTaskWithLearnings(
       },
       createdAt: now,
       updatedAt: now,
-    };
-    await writeLearning(standalone);
-    await addLearningToListIndex(standalone.id);
-    newCache.push(standaloneToTaskCache(standalone));
+    });
   }
 
-  const merged = dedupeLearningsByIdAndContent(task.learnings, newCache);
+  if (toInsert.length > 0) {
+    await db().from("learnings").insert(toInsert.map(standaloneToRow));
+  }
 
-  return updateTask(taskId, {
-    status: "completed",
-    completed_at: now,
-    learnings: merged,
-  });
+  return updateTask(taskId, { status: "completed", completed_at: now });
 }
 
 export async function moveNoteToLearning(noteId: string): Promise<StandaloneLearning | null> {
@@ -356,19 +307,7 @@ export async function moveLearningToNote(
 export async function moveLearningToGeneral(learningId: string): Promise<StandaloneLearning | null> {
   const s = await readLearning(learningId);
   if (!s || s.source.type !== "task" || !s.source.taskId) return null;
-  const task = await readTask(s.source.taskId);
-  if (task) {
-    await updateTask(s.source.taskId, {
-      learnings: task.learnings.filter((l) => l.id !== learningId),
-    });
-  }
-  const next: StandaloneLearning = {
-    ...s,
-    source: { type: "general" },
-    updatedAt: new Date().toISOString(),
-  };
-  await writeLearning(next);
-  return next;
+  return updateLearning(learningId, { source: { type: "general" } });
 }
 
 export async function moveLearningToTask(
@@ -381,17 +320,7 @@ export async function moveLearningToTask(
   if (!task) return null;
   const project = await getProject(task.project_id);
 
-  if (s.source.type === "task" && s.source.taskId && s.source.taskId !== taskId) {
-    const prev = await readTask(s.source.taskId);
-    if (prev) {
-      await updateTask(s.source.taskId, {
-        learnings: prev.learnings.filter((l) => l.id !== learningId),
-      });
-    }
-  }
-
-  const next: StandaloneLearning = {
-    ...s,
+  return updateLearning(learningId, {
     source: {
       type: "task",
       taskId: task.id,
@@ -399,14 +328,7 @@ export async function moveLearningToTask(
       projectId: task.project_id,
       projectName: project?.name ?? "",
     },
-    updatedAt: new Date().toISOString(),
-  };
-  await writeLearning(next);
-
-  const learnings = [
-    ...task.learnings.filter((l) => l.id !== learningId),
-    standaloneToTaskCache(next),
-  ];
-  await updateTask(taskId, { learnings });
-  return next;
+  });
 }
+
+export async function rebuildLearningsIndexFromDisk(): Promise<void> {}

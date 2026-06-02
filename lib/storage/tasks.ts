@@ -1,5 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
 import {
   taskArchitectureSchema,
   taskSchema,
@@ -7,96 +5,74 @@ import {
   type CreateTaskInput,
   type Task,
 } from "@/schemas/tasks";
-import {
-  addTaskToIndex,
-  readProjectTasksIndex,
-  rebuildProjectTasksIndex,
-  removeTaskFromIndex,
-} from "@/lib/storage/index-utils";
+import { db } from "@/lib/storage/db";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const TASKS_DIR = path.join(DATA_DIR, "tasks");
+// Strip fields that are not columns on the tasks table
+const TASK_VIRTUAL_FIELDS = new Set(["learnings"]);
 
-async function ensureTasksDir(): Promise<void> {
-  await fs.mkdir(TASKS_DIR, { recursive: true });
-}
-
-function taskPath(taskId: string): string {
-  return path.join(TASKS_DIR, `${taskId}.json`);
-}
-
-async function scanAllTasksForIndex(): Promise<Array<{ project_id: string; id: string }>> {
-  await ensureTasksDir();
-  const files = await fs.readdir(TASKS_DIR);
-  const rows: Array<{ project_id: string; id: string }> = [];
-  for (const file of files) {
-    if (!file.endsWith(".json")) continue;
-    const task = await readTask(file.replace(".json", ""));
-    if (task) rows.push({ project_id: task.project_id, id: task.id });
+function taskToRow(task: Partial<Task>): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(task)) {
+    if (!TASK_VIRTUAL_FIELDS.has(k)) row[k] = v;
   }
-  return rows;
+  return row;
 }
 
-export async function rebuildProjectTasksIndexFromDisk(): Promise<void> {
-  const rows = await scanAllTasksForIndex();
-  await rebuildProjectTasksIndex(async () => rows);
+async function fetchTaskLearningsCache(taskId: string) {
+  // Lazy import to avoid circular dependency
+  const { listLearningsByTask, standaloneToTaskCache } = await import("@/lib/storage/learnings");
+  const standalones = await listLearningsByTask(taskId);
+  return standalones.map(standaloneToTaskCache);
+}
+
+function rowToTask(row: Record<string, unknown>, learnings: Task["learnings"] = []): Task {
+  return taskSchema.parse({
+    ...row,
+    raw_input: row.raw_input ?? "",
+    card_description_images: row.card_description_images ?? [],
+    task_notes: row.task_notes ?? "",
+    task_notes_images: row.task_notes_images ?? [],
+    cursor_repo_analysis: row.cursor_repo_analysis ?? "",
+    cursor_repo_scan: row.cursor_repo_scan ?? "",
+    work_process: row.work_process ?? "",
+    main_problem: row.main_problem ?? "",
+    key_concepts: row.key_concepts ?? [],
+    issues: row.issues ?? [],
+    requested_clarifications: row.requested_clarifications ?? [],
+    learnings,
+    completed_at: row.completed_at ?? null,
+    analysis_error: row.analysis_error ?? null,
+    last_analysis_kind: row.last_analysis_kind ?? null,
+    analysis_partial: row.analysis_partial ?? false,
+  });
 }
 
 export async function readTask(taskId: string): Promise<Task | null> {
-  try {
-    await ensureTasksDir();
-    const raw = await fs.readFile(taskPath(taskId), "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    const result = taskSchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
+  const { data, error } = await db().from("tasks").select("*").eq("id", taskId).single();
+  if (error || !data) return null;
+  const learnings = await fetchTaskLearningsCache(taskId);
+  const result = taskSchema.safeParse(rowToTask(data as Record<string, unknown>, learnings));
+  return result.success ? result.data : null;
 }
 
-export async function writeTask(task: Task): Promise<void> {
-  await ensureTasksDir();
-  taskSchema.parse(task);
-  await fs.writeFile(taskPath(task.id), JSON.stringify(task, null, 2), "utf-8");
-}
+export async function writeTask(_task: Task): Promise<void> {}
 
 export async function listTasksByProject(projectId: string): Promise<Task[]> {
-  try {
-    await ensureTasksDir();
-    const index = await readProjectTasksIndex();
-    const ids = index?.[projectId];
-    if (ids && ids.length > 0) {
-      const tasks: Task[] = [];
-      for (const id of ids) {
-        const task = await readTask(id);
-        if (task && task.project_id === projectId) tasks.push(task);
-      }
-      tasks.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      return tasks;
-    }
-    const files = await fs.readdir(TASKS_DIR);
-    const tasks: Task[] = [];
-    for (const file of files) {
-      if (!file.endsWith(".json")) continue;
-      const task = await readTask(file.replace(".json", ""));
-      if (task && task.project_id === projectId) {
-        tasks.push(task);
-      }
-    }
-    tasks.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    await rebuildProjectTasksIndexFromDisk();
-    return tasks;
-  } catch {
-    return [];
-  }
+  const { data, error } = await db()
+    .from("tasks")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToTask(r as Record<string, unknown>));
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
   const now = new Date().toISOString();
-  const task: Task = {
+  const row = {
     id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     project_id: input.project_id,
-    user_id: input.user_id,
+    user_id: input.user_id ?? "local_user",
     title: input.title,
     raw_input: input.raw_input,
     card_description_images: input.card_description_images ?? [],
@@ -109,8 +85,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     task_notes: "",
     task_notes_images: [],
     cursor_repo_analysis: "",
-    cursor_repo_scan: "",
-    learnings: [],
+    cursor_repo_scan: input.cursor_repo_scan ?? "",
     work_process: "",
     main_problem: "",
     key_concepts: [],
@@ -121,29 +96,28 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     analysis_error: null,
     canonical_execute_result: null,
     canonical_understand_result: null,
+    canonical_testing_result: null,
+    canonical_qa_result: null,
     last_analysis_kind: null,
-    analysis_mode: input.analysis_mode,
+    analysis_mode: input.analysis_mode ?? null,
+    analysis_partial: false,
   };
-  await writeTask(task);
-  await addTaskToIndex(task.project_id, task.id);
-  return task;
+  const { data, error } = await db().from("tasks").insert(row).select().single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create task");
+  return rowToTask(data as Record<string, unknown>);
 }
 
 export async function updateTask(taskId: string, updates: Partial<Task>): Promise<Task | null> {
-  const current = await readTask(taskId);
-  if (!current) return null;
-  const next: Task = {
-    ...current,
-    ...updates,
-    id: current.id,
-    project_id: current.project_id,
-    user_id: current.user_id,
-    created_at: current.created_at,
-    updated_at: new Date().toISOString(),
-  };
-  taskSchema.parse(next);
-  await writeTask(next);
-  return next;
+  const row = taskToRow({ ...updates, updated_at: new Date().toISOString() });
+  const { data, error } = await db()
+    .from("tasks")
+    .update(row)
+    .eq("id", taskId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  const learnings = await fetchTaskLearningsCache(taskId);
+  return rowToTask(data as Record<string, unknown>, learnings);
 }
 
 export async function setTaskUnderstanding(taskId: string, understanding: unknown): Promise<Task | null> {
@@ -157,16 +131,10 @@ export async function setTaskArchitecture(taskId: string, architecture: unknown)
 }
 
 export async function deleteTask(taskId: string): Promise<boolean> {
-  try {
-    const task = await readTask(taskId);
-    if (task) {
-      const { removeAllStandaloneForTask } = await import("@/lib/storage/learnings");
-      await removeAllStandaloneForTask(task.id);
-      await removeTaskFromIndex(task.project_id, task.id);
-    }
-    await fs.unlink(taskPath(taskId));
-    return true;
-  } catch {
-    return false;
-  }
+  const { removeAllStandaloneForTask } = await import("@/lib/storage/learnings");
+  await removeAllStandaloneForTask(taskId);
+  const { error } = await db().from("tasks").delete().eq("id", taskId);
+  return !error;
 }
+
+export async function rebuildProjectTasksIndexFromDisk(): Promise<void> {}

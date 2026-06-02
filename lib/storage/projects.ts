@@ -1,122 +1,96 @@
-import { promises as fs } from "fs";
-import path from "path";
-import {
-  projectsFileSchema,
-  projectSchema,
-  type Project,
-  type CreateProjectInput,
-} from "@/schemas/projects";
+import { projectSchema, type CreateProjectInput, type Project } from "@/schemas/projects";
+import { db } from "@/lib/storage/db";
 import { deleteTask, listTasksByProject } from "@/lib/storage/tasks";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const PROJECTS_PATH = path.join(DATA_DIR, "projects.json");
-
-async function ensureDataDir(): Promise<void> {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-  } catch {
-    // ignore
-  }
+function rowToProject(row: Record<string, unknown>): Project {
+  return projectSchema.parse({
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    repo_scan: row.repo_scan ?? "",
+    total_tasks: row.total_tasks ?? 0,
+    completed_tasks: row.completed_tasks ?? 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  });
 }
 
 export async function readProjects(): Promise<Project[]> {
-  try {
-    await ensureDataDir();
-    const raw = await fs.readFile(PROJECTS_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    const result = projectsFileSchema.safeParse(parsed);
-    if (!result.success) return [];
-    return result.data;
-  } catch {
-    return [];
-  }
+  const { data, error } = await db()
+    .from("projects")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToProject(r as Record<string, unknown>));
 }
 
-export async function writeProjects(projects: Project[]): Promise<void> {
-  await ensureDataDir();
-  const validated = projectsFileSchema.parse(projects);
-  await fs.writeFile(
-    PROJECTS_PATH,
-    JSON.stringify(validated, null, 2),
-    "utf-8"
-  );
+export async function getProject(projectId: string): Promise<Project | null> {
+  const { data, error } = await db()
+    .from("projects")
+    .select("*")
+    .eq("id", projectId)
+    .single();
+  if (error || !data) return null;
+  return rowToProject(data as Record<string, unknown>);
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const projects = await readProjects();
   const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const now = new Date().toISOString();
-  const project: Project = {
+  const row = {
     id,
-    user_id: input.user_id,
+    user_id: input.user_id ?? "local_user",
     name: input.name,
-    description: input.description,
+    description: input.description ?? null,
     repo_scan: "",
     total_tasks: 0,
     completed_tasks: 0,
     created_at: now,
     updated_at: now,
   };
-  projectSchema.parse(project);
-  projects.push(project);
-  await writeProjects(projects);
-  return project;
+  const { data, error } = await db().from("projects").insert(row).select().single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create project");
+  return rowToProject(data as Record<string, unknown>);
 }
 
 export async function updateProject(
   projectId: string,
   updates: Partial<Pick<Project, "name" | "description" | "repo_scan">>
 ): Promise<Project | null> {
-  const projects = await readProjects();
-  const idx = projects.findIndex((p) => p.id === projectId);
-  if (idx < 0) return null;
-  const prev = projects[idx] as Project;
-  const next: Project = {
-    ...prev,
-    ...updates,
-    id: prev.id,
-    user_id: prev.user_id,
-    created_at: prev.created_at,
-    updated_at: new Date().toISOString(),
-  };
-  projectSchema.parse(next);
-  projects[idx] = next;
-  await writeProjects(projects);
-  return next;
-}
-
-export async function getProject(projectId: string): Promise<Project | null> {
-  const projects = await readProjects();
-  return projects.find((p) => p.id === projectId) ?? null;
+  const { data, error } = await db()
+    .from("projects")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  return rowToProject(data as Record<string, unknown>);
 }
 
 export async function deleteProject(projectId: string): Promise<boolean> {
-  const projects = await readProjects();
-  const idx = projects.findIndex((p) => p.id === projectId);
-  if (idx < 0) return false;
   const tasks = await listTasksByProject(projectId);
-  for (const task of tasks) {
-    await deleteTask(task.id);
-  }
-  projects.splice(idx, 1);
-  await writeProjects(projects);
-  return true;
+  for (const task of tasks) await deleteTask(task.id);
+  const { error } = await db().from("projects").delete().eq("id", projectId);
+  return !error;
 }
 
 export async function syncProjectTaskCounts(projectId: string): Promise<Project | null> {
-  const projects = await readProjects();
-  const idx = projects.findIndex((p) => p.id === projectId);
-  if (idx < 0) return null;
   const tasks = await listTasksByProject(projectId);
-  const completedTasks = tasks.filter((task) => task.status === "completed").length;
-  const next: Project = {
-    ...projects[idx],
-    total_tasks: tasks.length,
-    completed_tasks: completedTasks,
-    updated_at: new Date().toISOString(),
-  };
-  projectSchema.parse(next);
-  projects[idx] = next;
-  await writeProjects(projects);
-  return next;
+  const completedTasks = tasks.filter((t) => t.status === "completed").length;
+  return updateProject(projectId, {}) // trigger updated_at
+    .then(async (p) => {
+      if (!p) return null;
+      const { data, error } = await db()
+        .from("projects")
+        .update({ total_tasks: tasks.length, completed_tasks: completedTasks, updated_at: new Date().toISOString() })
+        .eq("id", projectId)
+        .select()
+        .single();
+      if (error || !data) return null;
+      return rowToProject(data as Record<string, unknown>);
+    });
 }
+
+// kept for compat — no-op in Supabase world
+export async function writeProjects(_projects: Project[]): Promise<void> {}

@@ -12,15 +12,24 @@ import { CollapsibleSection } from "@/components/collapsible-section";
 import { LearningCard } from "@/components/cards/learning-card";
 import { LearningModal } from "@/components/modals/learning-modal";
 import type { StandaloneLearning } from "@/schemas/learnings";
+import type { Project } from "@/schemas/projects";
 import type { Task, TaskIssue } from "@/schemas/tasks";
-import { generateTaskAwareRepoScanPromptFromDraft } from "@/lib/cursor-prompts";
+import {
+  generateGenericRepoScanPrompt,
+  generateTaskOnlyPrompt,
+} from "@/lib/cursor-prompts";
 import CompleteTaskModal from "@/components/tasks/complete-task-modal";
 import { AnalysisTypeSelector } from "@/components/tasks/analysis-type-selector";
-import { AnalysisResultView } from "@/components/tasks/analysis-result-view";
+import {
+  AnalysisResultView,
+  ClaudePreambleCallout,
+  StageDoneCheckbox,
+} from "@/components/tasks/analysis-result-view";
 import {
   buildAnalyzedTaskExportMarkdown,
   exportFilenameForTask,
 } from "@/lib/export-analyzed-task";
+import { ImageLightboxTrigger } from "@/components/image-lightbox-trigger";
 
 const DEFAULT_WORK_PROCESS_TEXT =
   "I started by researching REACT APP & EXTENSION and created 2 versions of extensions and one application.";
@@ -68,6 +77,19 @@ ${stagesText}
 Provide a minimal, practical architecture plan to fulfill the above. Focus on Phase 1 / first implementation scope only. No code. No unnecessary future-proofing. Simple, readable structure: what to build, in what order, and how to know each part is done.`;
 }
 
+function isAbortError(e: unknown): boolean {
+  return e instanceof Error && e.name === "AbortError";
+}
+
+function analysisFlowLabel(mode: Task["analysis_mode"]): string {
+  if (mode === "execute") return "Understand & Execute";
+  if (mode === "understand") return "Deep Understanding";
+  if (mode === "testing_understand") return "Testing Mode & Understanding";
+  if (mode === "qa_kalk") return "QA Test Analysis (KALK)";
+  if (mode === "qa_general") return "QA Test Analysis (General)";
+  return "—";
+}
+
 export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -79,6 +101,7 @@ export default function TaskDetailPage() {
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
   const [cursorRepoScan, setCursorRepoScan] = useState("");
+  const [projectRepoScan, setProjectRepoScan] = useState<string>("");
   const [currentStep, setCurrentStep] = useState(1);
   const [standaloneLearnings, setStandaloneLearnings] = useState<StandaloneLearning[]>([]);
   const [detailLearningModalOpen, setDetailLearningModalOpen] = useState(false);
@@ -89,6 +112,8 @@ export default function TaskDetailPage() {
   const [showAnalysisPicker, setShowAnalysisPicker] = useState(false);
   /** When task has a saved analysis_mode, user can open the full flow picker from the draft card. */
   const [showDraftFlowOverride, setShowDraftFlowOverride] = useState(false);
+  const analysisAbortRef = useRef<AbortController | null>(null);
+  const analysisRunIdRef = useRef(0);
   const [workProcessDraft, setWorkProcessDraft] = useState("");
   const [isSavingWorkProcess, setIsSavingWorkProcess] = useState(false);
   const [isSavingIssues, setIsSavingIssues] = useState(false);
@@ -113,10 +138,7 @@ export default function TaskDetailPage() {
   const [addLearningModalOpen, setAddLearningModalOpen] = useState(false);
   const [learningDrafts, setLearningDrafts] = useState<
     Array<{ content: string; category: string; attachments: string[] }>
-  >([
-    { content: "", category: "", attachments: [] },
-    { content: "", category: "", attachments: [] },
-  ]);
+  >([{ content: "", category: "", attachments: [] }]);
   const [isAddingLearning, setIsAddingLearning] = useState(false);
   const [learningDraftImageTargetIndex, setLearningDraftImageTargetIndex] = useState<number | null>(null);
   const learningImageInputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +171,25 @@ export default function TaskDetailPage() {
   }, [loadTask]);
 
   useEffect(() => {
+    if (!projectId) {
+      setProjectRepoScan("");
+      return;
+    }
+    const ac = new AbortController();
+    void fetch(`/api/projects/${encodeURIComponent(projectId)}`, { signal: ac.signal })
+      .then((r) => r.json())
+      .then((j: { success?: boolean; data?: Project }) => {
+        if (j.success && j.data) setProjectRepoScan(j.data.repo_scan ?? "");
+        else setProjectRepoScan("");
+      })
+      .catch((e) => {
+        if (e instanceof Error && e.name === "AbortError") return;
+        setProjectRepoScan("");
+      });
+    return () => ac.abort();
+  }, [projectId]);
+
+  useEffect(() => {
     setShowDraftFlowOverride(false);
   }, [taskId]);
 
@@ -175,55 +216,140 @@ export default function TaskDetailPage() {
     });
   }, [task, draftTitle, draftRawInput, notes, cursorRepoScan]);
 
+  const cancelAnalysis = useCallback(() => {
+    analysisAbortRef.current?.abort();
+  }, []);
+
   const runAnalysis = useCallback(
-    async (kind: "execute" | "understand", userQuestions?: string) => {
+    async (
+      kind:
+        | "execute"
+        | "understand"
+        | "testing_understand"
+        | "qa_kalk"
+        | "qa_general",
+      options?: { userQuestions?: string; userFocus?: string }
+    ) => {
       if (!taskId || !task) return;
+      analysisRunIdRef.current += 1;
+      const runId = analysisRunIdRef.current;
+      analysisAbortRef.current?.abort();
+      const ac = new AbortController();
+      analysisAbortRef.current = ac;
+
+      const taskSnapshot = structuredClone(task);
       setIsRunningAnalysis(true);
       setAnalyzeFullError(null);
       setAnalysisRunningLabel(
         kind === "execute"
           ? "Running execution analysis with Claude…"
-          : "Running deep understanding analysis with Claude…"
+          : kind === "understand"
+            ? "Running deep understanding analysis with Claude…"
+            : kind === "testing_understand"
+              ? "Running testing & understanding analysis with Claude…"
+              : kind === "qa_kalk"
+                ? "Running KALK QA analysis with Claude…"
+                : "Running General QA analysis with Claude…"
       );
       try {
-        if (task.status === "draft") {
-          await persistDraftFields();
-        }
+        await persistDraftFields();
+        if (runId !== analysisRunIdRef.current) return;
         await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "analyzing" }),
         });
+        if (runId !== analysisRunIdRef.current) return;
         const url =
           kind === "execute"
             ? `/api/tasks/${encodeURIComponent(taskId)}/analyze-execute`
-            : `/api/tasks/${encodeURIComponent(taskId)}/analyze-understand`;
+            : kind === "understand"
+              ? `/api/tasks/${encodeURIComponent(taskId)}/analyze-understand`
+              : kind === "testing_understand"
+                ? `/api/tasks/${encodeURIComponent(taskId)}/analyze-testing-understand`
+                : `/api/tasks/${encodeURIComponent(taskId)}/analyze-qa`;
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: ac.signal,
           body:
             kind === "execute"
               ? JSON.stringify({ mode: "execute" })
-              : JSON.stringify({
-                  mode: "understand",
-                  userQuestions: userQuestions || undefined,
-                }),
+              : kind === "understand"
+                ? JSON.stringify({
+                    mode: "understand",
+                    userQuestions: options?.userQuestions || undefined,
+                  })
+                : kind === "testing_understand"
+                  ? JSON.stringify({
+                      mode: "testing_understand",
+                      userFocus: options?.userFocus || undefined,
+                    })
+                  : JSON.stringify({
+                      mode: kind,
+                      userFocus: options?.userFocus || undefined,
+                    }),
         });
-        const json = (await res.json()) as { success?: boolean; data?: Task; error?: string };
+        if (runId !== analysisRunIdRef.current) return;
+        const json = (await res.json()) as {
+          success?: boolean;
+          data?: Task;
+          error?: string;
+          reason?: "timeout" | "response_truncated" | "no_json_found" | "parse_failed" | "upstream_error";
+          partial?: boolean;
+        };
+        if (runId !== analysisRunIdRef.current) return;
         if (!json.success) {
-          setAnalyzeFullError(json.error ?? "Analysis failed");
+          const base = json.error ?? "Analysis failed";
+          const helpful =
+            json.reason === "response_truncated"
+              ? "Analysis response was too long and got cut off. Try simplifying the task description / repo scan, or run again."
+              : json.reason === "timeout"
+                ? "Analysis took too long and timed out. Try again, or simplify the task / repo scan."
+                : json.reason === "no_json_found"
+                  ? "Claude returned an answer without a JSON object. Try running again."
+                  : json.reason === "parse_failed"
+                    ? "Claude returned JSON-like output that couldn't be parsed. Try running again."
+                    : null;
+          setAnalyzeFullError(helpful ? `${base}\n\n${helpful}` : base);
           await loadTask();
           return;
         }
-        if (json.data) setTask(json.data);
+        // Persist the chosen flow even if analysis succeeded via re-run.
+        await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ analysis_mode: kind }),
+        });
+        if (runId !== analysisRunIdRef.current) return;
+        if (json.data) setTask({ ...json.data, analysis_mode: kind });
         else await loadTask();
+        if (runId !== analysisRunIdRef.current) return;
         setShowAnalysisPicker(false);
+        setShowDraftFlowOverride(false);
       } catch (e) {
+        if (isAbortError(e)) {
+          if (runId !== analysisRunIdRef.current) return;
+          setTask(taskSnapshot);
+          setAnalyzeFullError(taskSnapshot.analysis_error ?? null);
+          void fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: taskSnapshot.status,
+              analysis_error: taskSnapshot.analysis_error ?? null,
+            }),
+          });
+          return;
+        }
+        if (runId !== analysisRunIdRef.current) return;
         setAnalyzeFullError(e instanceof Error ? e.message : "Analysis failed");
         await loadTask();
       } finally {
-        setIsRunningAnalysis(false);
-        setAnalysisRunningLabel(null);
+        if (runId === analysisRunIdRef.current) {
+          setIsRunningAnalysis(false);
+          setAnalysisRunningLabel(null);
+        }
       }
     },
     [taskId, task, persistDraftFields, loadTask]
@@ -277,6 +403,16 @@ export default function TaskDetailPage() {
           {analysisRunningLabel ??
             "Running analysis. This usually takes 1–3 minutes depending on task size."}
         </p>
+        {isRunningAnalysis && (
+          <Button
+            type="button"
+            variant="outline"
+            className="border-slate-600 text-slate-200"
+            onClick={cancelAnalysis}
+          >
+            Cancel analysis
+          </Button>
+        )}
         {analyzeFullError && (
           <div className="mt-4 max-w-lg w-full rounded-lg border border-red-800 bg-red-950/30 p-4 text-left">
             <p className="text-sm font-medium text-red-300">Analysis failed</p>
@@ -293,6 +429,7 @@ export default function TaskDetailPage() {
 
   const displayAnalysisError = analyzeFullError ?? task.analysis_error ?? null;
   const showAnalysisErrorBanner = !!displayAnalysisError && task.status === "draft";
+  const showPartialBanner = task.analysis_partial === true;
 
   const saveNotes = async () => {
     if (notes === (task?.task_notes ?? "")) return;
@@ -338,7 +475,7 @@ export default function TaskDetailPage() {
     }
   };
 
-  const saveDraftTask = async () => {
+  const saveTaskCard = async () => {
     if (!task) return;
     setIsSavingDraft(true);
     try {
@@ -354,8 +491,8 @@ export default function TaskDetailPage() {
       });
       await loadTask();
     } catch (error) {
-      console.error("Failed to save draft task:", error);
-      alert("Failed to save draft task.");
+      console.error("Failed to save task card:", error);
+      alert("Failed to save task card.");
     } finally {
       setIsSavingDraft(false);
     }
@@ -367,18 +504,12 @@ export default function TaskDetailPage() {
       textarea && textarea.selectionStart !== textarea.selectionEnd
         ? notes.slice(textarea.selectionStart, textarea.selectionEnd)
         : "";
-    setLearningDrafts([
-      { content: selected.trim(), category: "", attachments: [] },
-      { content: "", category: "", attachments: [] },
-    ]);
+    setLearningDrafts([{ content: selected.trim(), category: "", attachments: [] }]);
     setAddLearningModalOpen(true);
   };
 
   const openAddLearningModal = () => {
-    setLearningDrafts([
-      { content: "", category: "", attachments: [] },
-      { content: "", category: "", attachments: [] },
-    ]);
+    setLearningDrafts([{ content: "", category: "", attachments: [] }]);
     setAddLearningModalOpen(true);
   };
 
@@ -401,12 +532,9 @@ export default function TaskDetailPage() {
         if (!response.ok) throw new Error("Failed to add learning");
       }
       setAddLearningModalOpen(false);
-      setLearningDrafts([
-        { content: "", category: "", attachments: [] },
-        { content: "", category: "", attachments: [] },
-      ]);
+      setLearningDrafts([{ content: "", category: "", attachments: [] }]);
       await loadTask();
-      setCurrentStep(3);
+      setCurrentStep(4);
     } catch (error) {
       console.error("Failed to add learning:", error);
       alert("Failed to add learning.");
@@ -455,6 +583,32 @@ export default function TaskDetailPage() {
               <p className="text-xs text-slate-400 mt-2">Task is back to draft. Fix and run Analyze Task again to clear.</p>
             </div>
             <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-200 shrink-0" onClick={() => setAnalyzeFullError(null)} aria-label="Dismiss">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {showPartialBanner && (
+          <div className="rounded-lg border border-amber-700 bg-amber-950/20 p-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-200">Analysis partially completed</p>
+              <p className="text-sm text-slate-200 mt-1">
+                Claude&apos;s response was likely cut off. Some sections may be missing.
+              </p>
+              <p className="text-xs text-slate-400 mt-2">
+                Try running analysis again, or simplify the task description / repo scan.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-400 hover:text-slate-200 shrink-0"
+              onClick={() => void fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ analysis_partial: false }),
+              }).then(() => void loadTask())}
+              aria-label="Dismiss"
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -514,18 +668,27 @@ export default function TaskDetailPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-300">Card description</label>
+                <label className="text-sm font-medium text-slate-300">
+                  Original task description
+                </label>
                 <Textarea
                   value={draftRawInput}
                   onChange={(e) => setDraftRawInput(e.target.value)}
                   className="mt-1.5 min-h-[160px] bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
                   placeholder="Paste the full task card or describe the task. Add notes or clarifications — analysis will use this full text."
                 />
+                <p className="text-xs text-slate-500 mt-1">
+                  Card text, your notes, or your own wording — Claude uses this entire field.
+                </p>
               </div>
               {!task.analysis_mode && (
                 <AnalysisTypeSelector
                   onSelectExecute={() => void runAnalysis("execute")}
-                  onSelectUnderstand={(q) => void runAnalysis("understand", q)}
+                  onSelectUnderstand={(q) => void runAnalysis("understand", { userQuestions: q })}
+                  onSelectTestingUnderstand={(f) =>
+                    void runAnalysis("testing_understand", { userFocus: f })
+                  }
+                  onSelectQa={(mode, f) => void runAnalysis(mode, { userFocus: f })}
                   isAnalyzing={isRunningAnalysis}
                   runningLabel={analysisRunningLabel}
                 />
@@ -534,9 +697,7 @@ export default function TaskDetailPage() {
                 <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 space-y-3">
                   <p className="text-sm text-slate-300">
                     <span className="text-slate-500">Saved flow:</span>{" "}
-                    {task.analysis_mode === "execute"
-                      ? "Understand & Execute"
-                      : "Deep Understanding"}
+                    {analysisFlowLabel(task.analysis_mode)}
                   </p>
                   <p className="text-xs text-slate-500">
                     Chosen when the task was created. Use Change flow to pick a different analysis, or run with this flow.
@@ -566,7 +727,11 @@ export default function TaskDetailPage() {
                 <div className="space-y-2">
                   <AnalysisTypeSelector
                     onSelectExecute={() => void runAnalysis("execute")}
-                    onSelectUnderstand={(q) => void runAnalysis("understand", q)}
+                    onSelectUnderstand={(q) => void runAnalysis("understand", { userQuestions: q })}
+                    onSelectTestingUnderstand={(f) =>
+                      void runAnalysis("testing_understand", { userFocus: f })
+                    }
+                    onSelectQa={(mode, f) => void runAnalysis(mode, { userFocus: f })}
                     isAnalyzing={isRunningAnalysis}
                     runningLabel={analysisRunningLabel}
                   />
@@ -583,7 +748,7 @@ export default function TaskDetailPage() {
               <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-3">
                 <p className="text-sm font-medium text-slate-300">Cursor repo scan</p>
                 <p className="text-xs text-slate-500">
-                  Copy the prompt below, run it in Cursor, then paste Cursor&apos;s answer in the box.
+                  Copy the repo prompt first (once per project is enough). Copy the task prompt for this ticket only. Run in Cursor, then paste the repo analysis in the box.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
@@ -592,17 +757,32 @@ export default function TaskDetailPage() {
                     size="sm"
                     className="border-slate-600 text-slate-300 hover:bg-slate-700"
                     onClick={() => {
-                      const prompt = generateTaskAwareRepoScanPromptFromDraft(
-                        draftTitle.trim() || task.title,
-                        draftRawInput.trim() || "(see card description)"
-                      );
+                      void navigator.clipboard.writeText(generateGenericRepoScanPrompt());
+                      setDraftCopyToast(true);
+                      setTimeout(() => setDraftCopyToast(false), 2500);
+                    }}
+                  >
+                    <ClipboardCopy className="w-4 h-4 mr-2" />
+                    Copy Repo Context
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    onClick={() => {
+                      const prompt = generateTaskOnlyPrompt({
+                        title: draftTitle.trim() || task.title,
+                        rawInput: draftRawInput.trim() || task.raw_input || "(see card description)",
+                        goal: task.understanding?.high_level_goal?.trim() || undefined,
+                      });
                       void navigator.clipboard.writeText(prompt);
                       setDraftCopyToast(true);
                       setTimeout(() => setDraftCopyToast(false), 2500);
                     }}
                   >
                     <ClipboardCopy className="w-4 h-4 mr-2" />
-                    Copy prompt for Cursor
+                    Copy Task Prompt
                   </Button>
                   {draftCopyToast && (
                     <span className="text-xs text-emerald-400">Copied to clipboard</span>
@@ -622,7 +802,7 @@ export default function TaskDetailPage() {
                 <Button
                   variant="outline"
                   className="border-slate-600 text-slate-100"
-                  onClick={() => void saveDraftTask()}
+                  onClick={() => void saveTaskCard()}
                   disabled={isSavingDraft || isRunningAnalysis}
                 >
                   {isSavingDraft ? "Saving…" : "Save draft"}
@@ -634,24 +814,56 @@ export default function TaskDetailPage() {
           <Card className="border-slate-800 bg-slate-900/50">
             <CardHeader>
               <h2 className="text-lg font-medium">Original task description</h2>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-slate-200 whitespace-pre-wrap rounded-md bg-slate-800/50 p-4 border border-slate-700">
-                {task.raw_input || "—"}
+              <p className="text-sm text-slate-500 mt-1">
+                Edit the task card text before Re-analyze or Run analysis — changes are saved when you
+                save or when you start an analysis.
               </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-slate-300">Title</label>
+                <Input
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  className="mt-1.5 bg-slate-800 border-slate-600 text-slate-100"
+                  placeholder="Task title"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-300">
+                  Original task description
+                </label>
+                <Textarea
+                  value={draftRawInput}
+                  onChange={(e) => setDraftRawInput(e.target.value)}
+                  className="mt-1.5 min-h-[160px] bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                  placeholder="Paste the full task card or describe the task. Add notes or clarifications — analysis will use this full text."
+                />
+              </div>
               {(task.card_description_images?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {task.card_description_images!.map((dataUrl, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element -- data URL from user upload
-                    <img
-                      key={i}
-                      src={dataUrl}
-                      alt=""
-                      className="max-h-32 rounded border border-slate-600 object-contain"
-                    />
-                  ))}
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">Images from when the task was created</p>
+                  <div className="flex flex-wrap gap-2">
+                    {task.card_description_images!.map((dataUrl, i) => (
+                      <ImageLightboxTrigger
+                        key={i}
+                        src={dataUrl}
+                        imgClassName="max-h-32 rounded border border-slate-600 object-contain"
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700">
+                <Button
+                  variant="outline"
+                  className="border-slate-600 text-slate-100"
+                  onClick={() => void saveTaskCard()}
+                  disabled={isSavingDraft || isRunningAnalysis}
+                >
+                  {isSavingDraft ? "Saving…" : "Save task card"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -671,8 +883,9 @@ export default function TaskDetailPage() {
                   [
                     { step: 1, label: "Understanding" },
                     { step: 2, label: "Notes" },
-                    { step: 3, label: "Learnings" },
-                    { step: 4, label: "Complete" },
+                    { step: 3, label: "Workflow" },
+                    { step: 4, label: "Learnings" },
+                    { step: 5, label: "Complete" },
                   ] as const
                 ).map(({ step, label }) => (
                   <button
@@ -723,9 +936,7 @@ export default function TaskDetailPage() {
                       <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 space-y-3">
                         <p className="text-sm text-slate-300">
                           <span className="text-slate-500">Saved flow:</span>{" "}
-                          {task.analysis_mode === "execute"
-                            ? "Understand & Execute"
-                            : "Deep Understanding"}
+                          {analysisFlowLabel(task.analysis_mode)}
                         </p>
                         <p className="text-xs text-slate-500">
                           Use Re-analyze to switch flows, or run analysis with the saved flow below.
@@ -756,18 +967,22 @@ export default function TaskDetailPage() {
                       (task.understanding && showAnalysisPicker)) && (
                       <AnalysisTypeSelector
                         onSelectExecute={() => void runAnalysis("execute")}
-                        onSelectUnderstand={(q) => void runAnalysis("understand", q)}
+                        onSelectUnderstand={(q) => void runAnalysis("understand", { userQuestions: q })}
+                        onSelectTestingUnderstand={(f) =>
+                          void runAnalysis("testing_understand", { userFocus: f })
+                        }
+                        onSelectQa={(mode, f) => void runAnalysis(mode, { userFocus: f })}
                         isAnalyzing={isRunningAnalysis}
                         runningLabel={analysisRunningLabel}
                       />
                     )}
-                  <AnalysisResultView task={task} />
+                  <AnalysisResultView task={task} projectRepoScan={projectRepoScan} />
                   {!task.understanding ? (
                     <p className="text-sm text-slate-400">
                       {task.status === "draft"
                         ? task.analysis_mode && !showDraftFlowOverride
                           ? "Run analysis from the Edit draft task card above, or change flow to pick a different analysis."
-                          : "Run Understand & Execute or Deep Understanding from the Edit draft task card above."
+                          : "Choose an analysis flow (Execute, Deep Understanding, Testing plan, or QA Test Analysis) from the Edit draft task card above."
                         : task.analysis_mode && !showAnalysisPicker
                           ? "Run analysis with your saved flow above, or use Change flow / Re-analyze to switch."
                           : "Pick a flow above to run Claude analysis. To run again later, use Re-analyze in the header."}
@@ -814,26 +1029,40 @@ export default function TaskDetailPage() {
                       {(task.understanding.stages?.length ?? 0) > 0 ? (
                         <div className="space-y-4">
                           <p className="text-sm font-medium text-slate-400">Stages</p>
-                          {task.understanding.stages!.map((stage, idx) => (
-                            <div
-                              key={`${stage.title}-${idx}`}
-                              className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 space-y-2"
-                            >
-                              <p className="font-medium text-slate-100">{stage.title}</p>
-                              <p className="text-sm text-slate-300">{stage.goal}</p>
-                              <ul className="text-sm text-slate-200 list-disc pl-5 space-y-0.5">
-                                {stage.tasks.map((t, i) => (
-                                  <li key={`${idx}-${i}`}>{t}</li>
-                                ))}
-                              </ul>
-                              <p className="text-xs font-medium text-slate-400 pt-1">Done when:</p>
-                              <ul className="text-xs text-slate-300 list-disc pl-5 space-y-0.5">
-                                {stage.completion_criteria.map((c, i) => (
-                                  <li key={`${idx}-c-${i}`}>{c}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
+                          {task.analysis_mode === "execute" && (
+                            <ClaudePreambleCallout projectRepoScan={projectRepoScan} />
+                          )}
+                          {task.understanding.stages!.map((stage, idx) => {
+                            const stageNum = stage.stage_number ?? idx + 1;
+                            const topicLine =
+                              stage.topic_description?.trim() || stage.goal?.trim() || "";
+                            return (
+                              <div
+                                key={`${stage.title}-${idx}`}
+                                className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 space-y-2"
+                              >
+                                <StageDoneCheckbox
+                                  taskId={task.id}
+                                  stageNumber={stageNum}
+                                  title={stage.title}
+                                />
+                                {topicLine ? (
+                                  <p className="text-sm text-slate-300 pl-6 -mt-1">{topicLine}</p>
+                                ) : null}
+                                <ul className="text-sm text-slate-200 list-disc pl-5 space-y-0.5">
+                                  {stage.tasks.map((t, i) => (
+                                    <li key={`${idx}-${i}`}>{t}</li>
+                                  ))}
+                                </ul>
+                                <p className="text-xs font-medium text-slate-400 pt-1">Done when:</p>
+                                <ul className="text-xs text-slate-300 list-disc pl-5 space-y-0.5">
+                                  {stage.completion_criteria.map((c, i) => (
+                                    <li key={`${idx}-c-${i}`}>{c}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         (task.understanding.major_steps?.length ?? 0) > 0 && (
@@ -902,42 +1131,6 @@ export default function TaskDetailPage() {
                           >
                             Mark as In Progress
                           </Button>
-                        )}
-                      </div>
-                    </CollapsibleSection>
-                    <CollapsibleSection title="Work process" defaultOpen={false}>
-                      <div className="space-y-3">
-                        <p className="text-sm text-slate-400">
-                          Document your work process for this task (saved automatically).
-                        </p>
-                        <Textarea
-                          value={workProcessDraft}
-                          onChange={(e) => setWorkProcessDraft(e.target.value)}
-                          onBlur={async () => {
-                            if (!task || workProcessDraft === (task.work_process ?? ""))
-                              return;
-                            setIsSavingWorkProcess(true);
-                            try {
-                              await fetch(
-                                `/api/tasks/${encodeURIComponent(task.id)}`,
-                                {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    work_process: workProcessDraft,
-                                  }),
-                                }
-                              );
-                              await loadTask();
-                            } finally {
-                              setIsSavingWorkProcess(false);
-                            }
-                          }}
-                          className="min-h-[220px] bg-slate-800 border-slate-700 whitespace-pre-wrap text-slate-100"
-                          placeholder={DEFAULT_WORK_PROCESS_TEXT}
-                        />
-                        {isSavingWorkProcess && (
-                          <span className="text-xs text-slate-400">Saving...</span>
                         )}
                       </div>
                     </CollapsibleSection>
@@ -1092,16 +1285,15 @@ export default function TaskDetailPage() {
                             key={i}
                             className="relative rounded border border-slate-600 overflow-hidden bg-slate-800"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element -- data URL from user upload */}
-                            <img
+                            <ImageLightboxTrigger
                               src={dataUrl}
-                              alt=""
-                              className="h-20 w-20 object-cover"
+                              imgClassName="h-20 w-20 object-cover block"
+                              className="block w-full"
                             />
                             <button
                               type="button"
                               aria-label="Remove image"
-                              className="absolute top-0.5 right-0.5 rounded bg-black/70 p-1 text-white hover:bg-black"
+                              className="absolute top-0.5 right-0.5 z-10 rounded bg-black/70 p-1 text-white hover:bg-black"
                               onClick={() => {
                                 const next = (task.task_notes_images ?? []).filter((_, j) => j !== i);
                                 void saveNotesImages(next);
@@ -1135,6 +1327,39 @@ export default function TaskDetailPage() {
                 </div>
               )}
               {currentStep === 3 && (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-300">Workflow</p>
+                  <p className="text-sm text-slate-400">
+                    Document how you approached this task — steps, tools, and decisions (saved automatically when you leave the field).
+                  </p>
+                  <Textarea
+                    value={workProcessDraft}
+                    onChange={(e) => setWorkProcessDraft(e.target.value)}
+                    onBlur={async () => {
+                      if (!task || workProcessDraft === (task.work_process ?? "")) return;
+                      setIsSavingWorkProcess(true);
+                      try {
+                        await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            work_process: workProcessDraft,
+                          }),
+                        });
+                        await loadTask();
+                      } finally {
+                        setIsSavingWorkProcess(false);
+                      }
+                    }}
+                    className="min-h-[280px] bg-slate-800 border-slate-700 whitespace-pre-wrap text-slate-100"
+                    placeholder={DEFAULT_WORK_PROCESS_TEXT}
+                  />
+                  {isSavingWorkProcess && (
+                    <span className="text-xs text-slate-400">Saving...</span>
+                  )}
+                </div>
+              )}
+              {currentStep === 4 && (
                 <div className="space-y-4">
                   {standaloneLearnings.length === 0 ? (
                     <p className="text-sm text-slate-400">No learnings yet.</p>
@@ -1162,7 +1387,7 @@ export default function TaskDetailPage() {
                   </Button>
                 </div>
               )}
-              {currentStep === 4 && (
+              {currentStep === 5 && (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-400">
                     {task.status === "completed"
@@ -1201,8 +1426,8 @@ export default function TaskDetailPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={currentStep >= 4}
-                  onClick={() => setCurrentStep((s) => Math.min(4, s + 1))}
+                  disabled={currentStep >= 5}
+                  onClick={() => setCurrentStep((s) => Math.min(5, s + 1))}
                 >
                   Next →
                 </Button>
@@ -1210,27 +1435,6 @@ export default function TaskDetailPage() {
             </CardContent>
           </Card>
         )}
-
-        <Card className="border-slate-800 bg-slate-900/50">
-          <CardHeader>
-            <h2 className="text-lg font-medium">Common Git commands</h2>
-          </CardHeader>
-          <CardContent>
-            <ul className="text-sm text-slate-200 space-y-2 font-mono">
-              <li><span className="text-slate-400">git status</span> — show working tree status</li>
-              <li><span className="text-slate-400">git add .</span> — stage all changes</li>
-              <li><span className="text-slate-400">git add &lt;file&gt;</span> — stage a file</li>
-              <li><span className="text-slate-400">git commit -m &quot;message&quot;</span> — commit with message</li>
-              <li><span className="text-slate-400">git push</span> — push to remote</li>
-              <li><span className="text-slate-400">git pull</span> — pull from remote</li>
-              <li><span className="text-slate-400">git branch</span> — list branches</li>
-              <li><span className="text-slate-400">git checkout -b &lt;name&gt;</span> — create and switch branch</li>
-              <li><span className="text-slate-400">git merge &lt;branch&gt;</span> — merge branch</li>
-              <li><span className="text-slate-400">git log --oneline</span> — short commit history</li>
-              <li><span className="text-slate-400">git diff</span> — show unstaged changes</li>
-            </ul>
-          </CardContent>
-        </Card>
       </div>
       <CompleteTaskModal
         open={completeModalOpen}
@@ -1311,12 +1515,15 @@ export default function TaskDetailPage() {
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(draft.attachments ?? []).map((dataUrl, i) => (
                           <div key={i} className="relative">
-                            {/* eslint-disable-next-line @next/next/no-img-element -- data URL from user upload */}
-                            <img src={dataUrl} alt="" className="h-12 w-12 rounded object-cover border border-slate-600" />
+                            <ImageLightboxTrigger
+                              src={dataUrl}
+                              imgClassName="h-12 w-12 rounded object-cover border border-slate-600 block"
+                              className="block"
+                            />
                             <button
                               type="button"
                               aria-label="Remove"
-                              className="absolute -top-0.5 -right-0.5 rounded bg-black/80 text-white w-4 h-4 flex items-center justify-center text-xs"
+                              className="absolute -top-0.5 -right-0.5 z-10 rounded bg-black/80 text-white w-4 h-4 flex items-center justify-center text-xs"
                               onClick={() =>
                                 setLearningDrafts((prev) =>
                                   prev.map((d, j) =>

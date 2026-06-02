@@ -3,8 +3,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Junior Developer Task Manager",
-  description: "Task understanding, architecture planning, and learning tracking",
+  title: "Erez`s Task Manager",
+  description:
+    "Task understanding, architecture planning, and learning tracking",
 };
 
 export default function RootLayout({

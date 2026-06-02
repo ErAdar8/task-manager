@@ -246,7 +246,7 @@ export default function ProjectDetailPage() {
                 }}
               >
                 <ClipboardCopy className="w-4 h-4 mr-2" />
-                Copy prompt for Cursor
+                Copy Repo Context
               </Button>
               {repoScanCopyToast && (
                 <span className="text-xs text-emerald-400 self-center">Copied to clipboard</span>

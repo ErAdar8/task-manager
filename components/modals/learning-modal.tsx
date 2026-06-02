@@ -5,7 +5,7 @@ import { marked } from "marked";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { displayImageSrc } from "@/lib/display-image";
+import { ImageLightboxTrigger } from "@/components/image-lightbox-trigger";
 import type { StandaloneLearning } from "@/schemas/learnings";
 
 function useModalFocusTrap(open: boolean, onClose: () => void) {
@@ -232,12 +232,10 @@ export function LearningModal({
           {(learning.attachments?.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-2">
               {learning.attachments!.map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <ImageLightboxTrigger
                   key={i}
-                  src={displayImageSrc(url)}
-                  alt=""
-                  className="max-h-40 rounded border border-slate-600 object-contain"
+                  src={url}
+                  imgClassName="max-h-40 rounded border border-slate-600 object-contain"
                 />
               ))}
             </div>

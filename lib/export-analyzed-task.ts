@@ -79,6 +79,20 @@ export function buildAnalyzedTaskExportMarkdown(task: Task): string {
     lines.push("```");
     lines.push("");
   }
+  if (task.canonical_testing_result && Object.keys(task.canonical_testing_result).length > 0) {
+    lines.push("### Testing plan (canonical JSON)");
+    lines.push("```json");
+    lines.push(safeJson(task.canonical_testing_result));
+    lines.push("```");
+    lines.push("");
+  }
+  if (task.canonical_qa_result && Object.keys(task.canonical_qa_result).length > 0) {
+    lines.push("### QA test analysis (canonical JSON)");
+    lines.push("```json");
+    lines.push(safeJson(task.canonical_qa_result));
+    lines.push("```");
+    lines.push("");
+  }
   if (task.cursor_repo_analysis?.trim()) {
     lines.push("### Cursor repo analysis (files / context)");
     lines.push(task.cursor_repo_analysis.trim());

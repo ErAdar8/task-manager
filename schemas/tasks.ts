@@ -24,6 +24,10 @@ export const understandingStageSchema = z.object({
   goal: z.string(),
   tasks: z.array(z.string()),
   completion_criteria: z.array(z.string()),
+  /** From execute analysis: topic card summary for this stage (deduped from topic_cards). */
+  topic_description: z.string().optional(),
+  /** From execute analysis execution_plan.stage_number; used for UI checkbox keys. */
+  stage_number: z.number().optional(),
 });
 export type UnderstandingStage = z.infer<typeof understandingStageSchema>;
 
@@ -107,9 +111,20 @@ export const taskSchema = z.object({
   canonical_execute_result: z.record(z.string(), z.unknown()).nullable().default(null),
   /** Raw JSON from understanding-learning.md flow (deep understanding). */
   canonical_understand_result: z.record(z.string(), z.unknown()).nullable().default(null),
-  last_analysis_kind: z.enum(["execute", "understand"]).nullable().default(null),
+  /** Raw JSON from understanding-testing.md flow (testing / evaluation plan). */
+  canonical_testing_result: z.record(z.string(), z.unknown()).nullable().default(null),
+  /** Raw JSON from qa-kalk.md / qa-general.md flows (QA test analysis). */
+  canonical_qa_result: z.record(z.string(), z.unknown()).nullable().default(null),
+  last_analysis_kind: z
+    .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .nullable()
+    .default(null),
   /** Preferred analysis flow chosen at creation (or updated on re-analyze). */
-  analysis_mode: z.enum(["execute", "understand"]).optional(),
+  analysis_mode: z
+    .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .optional(),
+  /** True when we repaired truncated JSON and produced a partial analysis result. */
+  analysis_partial: z.boolean().optional(),
 });
 export type Task = z.infer<typeof taskSchema>;
 
@@ -121,6 +136,10 @@ export const createTaskInputSchema = z.object({
   cursor_repo_scan: z.string().optional(),
   /** Data URLs for images attached to the card description */
   card_description_images: z.array(z.string()).optional(),
-  analysis_mode: z.enum(["execute", "understand"]).optional(),
+  analysis_mode: z
+    .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;
+
+export type TaskAnalysisMode = NonNullable<Task["analysis_mode"]>;

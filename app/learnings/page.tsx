@@ -1,17 +1,71 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LearningCard } from "@/components/cards/learning-card";
 import { LearningModal } from "@/components/modals/learning-modal";
 import type { StandaloneLearning } from "@/schemas/learnings";
+import type { Project } from "@/schemas/projects";
 
 type Tab = "all" | "tasks" | "general";
 
+function ExpandableLearningGroup({
+  title,
+  count,
+  defaultOpen = false,
+  href,
+  children,
+}: {
+  title: string;
+  count: number;
+  defaultOpen?: boolean;
+  href?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-900/50 overflow-hidden">
+      <div className="flex items-center gap-2 px-2 py-1 sm:px-3 min-h-[3rem]">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex flex-1 min-w-0 items-center gap-2 px-2 py-2 text-left rounded-md hover:bg-slate-800/60 transition-colors"
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" aria-hidden />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" aria-hidden />
+          )}
+          <FolderOpen className="h-4 w-4 text-slate-500 shrink-0" aria-hidden />
+          <span className="font-medium text-slate-100 truncate">{title}</span>
+          <span className="text-sm text-slate-500 tabular-nums shrink-0 ml-auto pl-2">{count}</span>
+        </button>
+        {href ? (
+          <Link
+            href={href}
+            className="text-xs text-emerald-400 hover:underline shrink-0 px-2 py-2"
+          >
+            Open
+          </Link>
+        ) : null}
+      </div>
+      {open && (
+        <div className="px-4 pb-4 border-t border-slate-800 pt-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LearningsPage() {
   const [items, setItems] = useState<StandaloneLearning[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("all");
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,26 +83,60 @@ export default function LearningsPage() {
     setItems(json.success && json.data ? json.data : []);
   };
 
+  const loadProjects = async () => {
+    const res = await fetch("/api/projects");
+    const json = (await res.json()) as { success: boolean; data?: Project[] };
+    setProjects(json.success && json.data ? json.data : []);
+  };
+
   useEffect(() => {
     void load();
+    void loadProjects();
   }, []);
 
-  const filtered = useMemo(() => {
+  const matchesSearch = useCallback((l: StandaloneLearning, q: string) => {
+    if (!q) return true;
+    const ql = q.toLowerCase();
+    const src = `${l.source.taskTitle ?? ""} ${l.source.projectName ?? ""}`.toLowerCase();
+    return (
+      (l.title ?? "").toLowerCase().includes(ql) ||
+      l.content.toLowerCase().includes(ql) ||
+      (l.category ?? "").toLowerCase().includes(ql) ||
+      src.includes(ql)
+    );
+  }, []);
+
+  /** All / From Tasks — flat grid with search */
+  const filteredForAllAndTasks = useMemo(() => {
+    if (tab === "general") return [];
     let list = items;
     if (tab === "tasks") list = list.filter((l) => l.source.type === "task");
-    if (tab === "general") list = list.filter((l) => l.source.type === "general");
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return list;
-    return list.filter((l) => {
-      const src = `${l.source.taskTitle ?? ""} ${l.source.projectName ?? ""}`.toLowerCase();
-      return (
-        (l.title ?? "").toLowerCase().includes(q) ||
-        l.content.toLowerCase().includes(q) ||
-        (l.category ?? "").toLowerCase().includes(q) ||
-        src.includes(q)
-      );
-    });
-  }, [items, search, tab]);
+    return list.filter((l) => matchesSearch(l, q));
+  }, [items, search, tab, matchesSearch]);
+
+  /** General tab — group by project + global-only learnings */
+  const generalGroups = useMemo(() => {
+    if (tab !== "general") return null;
+    const q = search.trim();
+    const globalLearnings = items
+      .filter((l) => l.source.type === "general")
+      .filter((l) => matchesSearch(l, q));
+    const byProject = projects
+      .map((p) => ({
+        project: p,
+        learnings: items.filter((l) => l.source.projectId === p.id).filter((l) => matchesSearch(l, q)),
+      }))
+      .sort((a, b) => a.project.name.localeCompare(b.project.name, undefined, { sensitivity: "base" }));
+    return { globalLearnings, byProject };
+  }, [tab, items, projects, search, matchesSearch]);
+
+  const generalIsEmpty =
+    tab === "general" &&
+    generalGroups != null &&
+    generalGroups.globalLearnings.length === 0 &&
+    generalGroups.byProject.every((x) => x.learnings.length === 0);
 
   const openCard = (l: StandaloneLearning) => {
     setActive(l);
@@ -121,16 +209,67 @@ export default function LearningsPage() {
                 General
               </Button>
             </div>
+            {tab === "general" && (
+              <p className="text-xs text-slate-500 pt-1">
+                Every project is listed below. Click a row to expand and see learnings from tasks in that project.
+                &quot;Global&quot; holds learnings not attached to any task.
+              </p>
+            )}
           </CardContent>
         </Card>
 
-        {filtered.length === 0 ? (
+        {tab === "general" && generalGroups ? (
+          generalIsEmpty ? (
+            <Card className="border-slate-800 bg-slate-900/50">
+              <CardContent className="p-6 text-slate-400">
+                {search.trim()
+                  ? "No learnings match your search."
+                  : "No learnings yet."}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              <ExpandableLearningGroup
+                title="Global (no project)"
+                count={generalGroups.globalLearnings.length}
+              >
+                {generalGroups.globalLearnings.length === 0 ? (
+                  <p className="text-sm text-slate-500">No global learnings yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {generalGroups.globalLearnings.map((l) => (
+                      <LearningCard key={l.id} learning={l} onOpen={() => openCard(l)} />
+                    ))}
+                  </div>
+                )}
+              </ExpandableLearningGroup>
+              {generalGroups.byProject.map(({ project, learnings }) => (
+                <ExpandableLearningGroup
+                  key={project.id}
+                  title={project.name}
+                  count={learnings.length}
+                  href={`/projects/${project.id}`}
+                >
+                  {learnings.length === 0 ? (
+                    <p className="text-sm text-slate-500">No learnings linked to this project yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {learnings.map((l) => (
+                        <LearningCard key={l.id} learning={l} onOpen={() => openCard(l)} />
+                      ))}
+                    </div>
+                  )}
+                </ExpandableLearningGroup>
+              ))}
+            </div>
+          )
+        ) : filteredForAllAndTasks.length === 0 ? (
           <Card className="border-slate-800 bg-slate-900/50">
             <CardContent className="p-6 text-slate-400">No learnings found.</CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((l) => (
+            {filteredForAllAndTasks.map((l) => (
               <LearningCard key={l.id} learning={l} onOpen={() => openCard(l)} />
             ))}
           </div>

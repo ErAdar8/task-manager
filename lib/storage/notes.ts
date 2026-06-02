@@ -1,140 +1,75 @@
-import { promises as fs } from "fs";
-import path from "path";
 import {
   createGenericNoteInputSchema,
   genericNoteSchema,
   type CreateGenericNoteInput,
   type GenericNote,
 } from "@/schemas/notes";
-import {
-  addNoteToIndex,
-  readNotesListIndex,
-  rebuildNotesIndex,
-  removeNoteFromIndex,
-} from "@/lib/storage/index-utils";
+import { db } from "@/lib/storage/db";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const NOTES_DIR = path.join(DATA_DIR, "notes");
-
-async function ensureNotesDir(): Promise<void> {
-  await fs.mkdir(NOTES_DIR, { recursive: true });
-}
-
-function notePath(noteId: string): string {
-  return path.join(NOTES_DIR, `${noteId}.json`);
-}
-
-async function scanAllNotesForIndex(): Promise<Array<{ user_id: string; id: string }>> {
-  await ensureNotesDir();
-  const files = await fs.readdir(NOTES_DIR);
-  const rows: Array<{ user_id: string; id: string }> = [];
-  for (const file of files) {
-    if (!file.endsWith(".json")) continue;
-    const note = await readNote(file.replace(".json", ""));
-    if (note) rows.push({ user_id: note.user_id, id: note.id });
-  }
-  return rows;
-}
-
-export async function rebuildNotesIndexFromDisk(): Promise<void> {
-  const rows = await scanAllNotesForIndex();
-  await rebuildNotesIndex(async () => rows);
+function rowToNote(row: Record<string, unknown>): GenericNote {
+  return genericNoteSchema.parse({
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    content: row.content,
+    tags: row.tags ?? [],
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  });
 }
 
 export async function readNote(noteId: string): Promise<GenericNote | null> {
-  try {
-    await ensureNotesDir();
-    const raw = await fs.readFile(notePath(noteId), "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    const result = genericNoteSchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
+  const { data, error } = await db().from("notes").select("*").eq("id", noteId).single();
+  if (error || !data) return null;
+  return rowToNote(data as Record<string, unknown>);
 }
 
-export async function writeNote(note: GenericNote): Promise<void> {
-  await ensureNotesDir();
-  genericNoteSchema.parse(note);
-  await fs.writeFile(notePath(note.id), JSON.stringify(note, null, 2), "utf-8");
-}
+export async function writeNote(_note: GenericNote): Promise<void> {}
 
 export async function listNotes(userId = "local_user"): Promise<GenericNote[]> {
-  try {
-    await ensureNotesDir();
-    const index = await readNotesListIndex();
-    const ids = index?.[userId];
-    if (ids && ids.length > 0) {
-      const notes: GenericNote[] = [];
-      for (const id of ids) {
-        const note = await readNote(id);
-        if (note && note.user_id === userId) notes.push(note);
-      }
-      notes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-      return notes;
-    }
-    const files = await fs.readdir(NOTES_DIR);
-    const notes: GenericNote[] = [];
-    for (const file of files) {
-      if (!file.endsWith(".json")) continue;
-      const note = await readNote(file.replace(".json", ""));
-      if (note && note.user_id === userId) {
-        notes.push(note);
-      }
-    }
-    notes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    await rebuildNotesIndexFromDisk();
-    return notes;
-  } catch {
-    return [];
-  }
+  const { data, error } = await db()
+    .from("notes")
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToNote(r as Record<string, unknown>));
 }
 
 export async function createNote(input: CreateGenericNoteInput): Promise<GenericNote> {
   const parsed = createGenericNoteInputSchema.parse(input);
   const now = new Date().toISOString();
-  const note: GenericNote = {
+  const row = {
     id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-    user_id: parsed.user_id,
+    user_id: parsed.user_id ?? "local_user",
     title: parsed.title,
     content: parsed.content,
     tags: parsed.tags ?? [],
     created_at: now,
     updated_at: now,
   };
-  await writeNote(note);
-  await addNoteToIndex(note.user_id, note.id);
-  return note;
+  const { data, error } = await db().from("notes").insert(row).select().single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create note");
+  return rowToNote(data as Record<string, unknown>);
 }
 
 export async function updateNote(
   noteId: string,
   updates: Partial<Pick<GenericNote, "title" | "content" | "tags">>
 ): Promise<GenericNote | null> {
-  const current = await readNote(noteId);
-  if (!current) return null;
-  const next: GenericNote = {
-    ...current,
-    ...updates,
-    id: current.id,
-    user_id: current.user_id,
-    created_at: current.created_at,
-    updated_at: new Date().toISOString(),
-  };
-  genericNoteSchema.parse(next);
-  await writeNote(next);
-  return next;
+  const { data, error } = await db()
+    .from("notes")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  return rowToNote(data as Record<string, unknown>);
 }
 
 export async function deleteNote(noteId: string): Promise<boolean> {
-  try {
-    const note = await readNote(noteId);
-    if (note) {
-      await removeNoteFromIndex(note.user_id, note.id);
-    }
-    await fs.unlink(notePath(noteId));
-    return true;
-  } catch {
-    return false;
-  }
+  const { error } = await db().from("notes").delete().eq("id", noteId);
+  return !error;
 }
+
+export async function rebuildNotesIndexFromDisk(): Promise<void> {}

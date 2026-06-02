@@ -4,17 +4,114 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
-// AI will add models here as needed
-// Example model structure:
-// model User {
-//   id        Int      @id @default(autoincrement())
-//   email     String   @unique
-//   name      String?
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-// }
+model Project {
+  id          String   @id
+  userId      String   @default("local_user") @map("user_id")
+  name        String
+  description String?
+  repoScan    String?  @map("repo_scan")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tasks     Task[]
+  learnings Learning[]
+
+  @@map("projects")
+}
+
+model Task {
+  id                       String    @id
+  projectId                String    @map("project_id")
+  userId                   String    @default("local_user") @map("user_id")
+  title                    String
+  rawInput                 String?   @map("raw_input")
+  status                   String    @default("draft")
+  analysisMode             String?   @map("analysis_mode")
+  lastAnalysisKind         String?   @map("last_analysis_kind")
+  understanding            Json?
+  understandingApproved    Boolean   @default(false) @map("understanding_approved")
+  requestedClarifications  String[]  @default([]) @map("requested_clarifications")
+  userEditedUnderstanding  String?   @map("user_edited_understanding")
+  architecture             Json?
+  taskNotes                String?   @map("task_notes")
+  cursorRepoAnalysis       String?   @map("cursor_repo_analysis")
+  cursorRepoScan           String?   @map("cursor_repo_scan")
+  workProcess              String?   @map("work_process")
+  mainProblem              String?   @map("main_problem")
+  keyConcepts              Json      @default("[]") @map("key_concepts")
+  issues                   Json      @default("[]")
+  canonicalExecuteResult   Json?     @map("canonical_execute_result")
+  canonicalUnderstandResult Json?    @map("canonical_understand_result")
+  canonicalTestingResult   Json?     @map("canonical_testing_result")
+  canonicalQaResult        Json?     @map("canonical_qa_result")
+  analysisError            String?   @map("analysis_error")
+  analysisPartial          Boolean   @default(false) @map("analysis_partial")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  completedAt              DateTime? @map("completed_at")
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  images    TaskImage[]
+  learnings Learning[]
+
+  @@map("tasks")
+}
+
+model TaskImage {
+  id          String   @id
+  taskId      String   @map("task_id")
+  kind        String   // "card" | "notes"
+  storagePath String   @map("storage_path")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_images")
+}
+
+model Learning {
+  id              String   @id
+  userId          String   @default("local_user") @map("user_id")
+  title           String?
+  content         String
+  category        String?
+  sourceType      String   @map("source_type") // "task" | "general"
+  sourceTaskId    String?  @map("source_task_id")
+  sourceProjectId String?  @map("source_project_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  sourceTask    Task?    @relation(fields: [sourceTaskId], references: [id], onDelete: SetNull)
+  sourceProject Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+  attachments   LearningAttachment[]
+
+  @@map("learnings")
+}
+
+model LearningAttachment {
+  id          String   @id
+  learningId  String   @map("learning_id")
+  storagePath String   @map("storage_path")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  learning Learning @relation(fields: [learningId], references: [id], onDelete: Cascade)
+
+  @@map("learning_attachments")
+}
+
+model Note {
+  id        String   @id
+  userId    String   @default("local_user") @map("user_id")
+  title     String
+  content   String
+  tags      String[] @default([])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("notes")
+}

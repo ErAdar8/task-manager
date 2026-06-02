@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { X, ImagePlus, ClipboardCopy } from "lucide-react";
-import { generateTaskAwareRepoScanPromptFromDraft } from "@/lib/cursor-prompts";
+import { generateGenericRepoScanPrompt, generateTaskOnlyPrompt } from "@/lib/cursor-prompts";
+import { QaAnalysisFlowPicker } from "@/components/tasks/qa-analysis-card";
+import { ImageLightboxTrigger } from "@/components/image-lightbox-trigger";
 import type { Task } from "@/schemas/tasks";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -38,7 +40,9 @@ export function NewTaskModal({
   const [cursorRepoScan, setCursorRepoScan] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMode, setSaveMode] = useState<"draft" | "create">("create");
-  const [analysisMode, setAnalysisMode] = useState<"execute" | "understand">("execute");
+  const [analysisMode, setAnalysisMode] = useState<
+    "execute" | "understand" | "testing_understand" | "qa_kalk" | "qa_general"
+  >("execute");
   const [copyToast, setCopyToast] = useState(false);
   const cardImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,7 +96,7 @@ export function NewTaskModal({
       }}
     >
       <Card
-        className="bg-slate-900 border border-slate-700 text-slate-100 shadow-xl max-w-lg w-full max-h-[90vh] overflow-auto"
+        className="bg-slate-900 border border-slate-700 text-slate-100 shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto"
         onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
       >
         <CardHeader className="p-5 flex flex-row items-center justify-between border-b border-slate-700">
@@ -171,16 +175,15 @@ export function NewTaskModal({
                       key={i}
                       className="relative rounded border border-slate-600 overflow-hidden bg-slate-800"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- data URL from user upload */}
-                      <img
+                      <ImageLightboxTrigger
                         src={dataUrl}
-                        alt=""
-                        className="h-20 w-20 object-cover"
+                        imgClassName="h-20 w-20 object-cover block"
+                        className="block w-full"
                       />
                       <button
                         type="button"
                         aria-label="Remove image"
-                        className="absolute top-0.5 right-0.5 rounded bg-black/70 p-1 text-white hover:bg-black"
+                        className="absolute top-0.5 right-0.5 z-10 rounded bg-black/70 p-1 text-white hover:bg-black"
                         onClick={() =>
                           setCardDescriptionImages((prev) => prev.filter((_, j) => j !== i))
                         }
@@ -205,17 +208,31 @@ export function NewTaskModal({
                 size="sm"
                 className="border-slate-600 text-slate-300 hover:bg-slate-800"
                 onClick={() => {
-                  const prompt = generateTaskAwareRepoScanPromptFromDraft(
-                    title.trim() || "New task",
-                    cardDescription.trim() || "(see task card)"
-                  );
+                  void navigator.clipboard.writeText(generateGenericRepoScanPrompt());
+                  setCopyToast(true);
+                  setTimeout(() => setCopyToast(false), 2500);
+                }}
+              >
+                <ClipboardCopy className="w-4 h-4 mr-2" />
+                Copy Repo Context
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                onClick={() => {
+                  const prompt = generateTaskOnlyPrompt({
+                    title: title.trim() || "New task",
+                    rawInput: cardDescription.trim() || "(see task card)",
+                  });
                   void navigator.clipboard.writeText(prompt);
                   setCopyToast(true);
                   setTimeout(() => setCopyToast(false), 2500);
                 }}
               >
                 <ClipboardCopy className="w-4 h-4 mr-2" />
-                Copy prompt for Cursor
+                Copy Task Prompt
               </Button>
               {copyToast && (
                 <span className="text-xs text-emerald-400 self-center">Copied to clipboard</span>
@@ -262,6 +279,21 @@ export function NewTaskModal({
                   Learn the domain first — concepts, reading order, pitfalls (Sonnet).
                 </p>
               </button>
+              <button
+                type="button"
+                onClick={() => setAnalysisMode("testing_understand")}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  analysisMode === "testing_understand"
+                    ? "border-sky-500/70 bg-sky-950/30 ring-1 ring-sky-500/40"
+                    : "border-slate-600 bg-slate-800/50 hover:border-slate-500"
+                }`}
+              >
+                <span className="text-sm font-medium text-sky-300">Testing Mode &amp; Understanding</span>
+                <p className="text-xs text-slate-400 mt-1">
+                  Plan how to test and compare — scenarios and metrics, not mini-prompts (Sonnet).
+                </p>
+              </button>
+              <QaAnalysisFlowPicker value={analysisMode} onChange={setAnalysisMode} />
             </div>
           </div>
           <div className="flex gap-2 pt-2 justify-end border-t border-slate-700">
