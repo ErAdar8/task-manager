@@ -122,6 +122,7 @@ export const taskSchema = z.object({
   /** Preferred analysis flow chosen at creation (or updated on re-analyze). */
   analysis_mode: z
     .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .nullable()
     .optional(),
   /** True when we repaired truncated JSON and produced a partial analysis result. */
   analysis_partial: z.boolean().optional(),
