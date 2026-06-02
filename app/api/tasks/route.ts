@@ -13,13 +13,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!projectId) {
     return NextResponse.json(err("projectId required"), { status: 400 });
   }
+  let tasks;
   try {
-    const tasks = await listTasksByProject(projectId);
-    return NextResponse.json(ok(tasks));
+    tasks = await listTasksByProject(projectId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[GET /api/tasks] error:", message);
+    console.error("[GET /api/tasks] listTasksByProject threw:", message);
     return NextResponse.json(err(message), { status: 500 });
+  }
+  try {
+    return NextResponse.json(ok(tasks));
+  } catch (serError) {
+    const message = serError instanceof Error ? serError.message : String(serError);
+    console.error("[GET /api/tasks] serialization threw:", message);
+    return NextResponse.json(err("serialization failed: " + message), { status: 500 });
   }
 }
 

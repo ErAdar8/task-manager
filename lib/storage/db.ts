@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import ws from "ws";
 
 let _client: SupabaseClient | null = null;
 
@@ -9,9 +10,7 @@ export function db(): SupabaseClient {
     if (!url || !key) throw new Error("Supabase env vars not set");
     _client = createClient(url, key, {
       auth: { persistSession: false },
-      // Disable realtime — this app only uses REST queries, not subscriptions.
-      // Avoids WebSocket/ws issues in Node 20 serverless environments.
-      realtime: { reconnectAfterMs: () => Infinity } as never,
+      realtime: { transport: ws },
     });
   }
   return _client;
