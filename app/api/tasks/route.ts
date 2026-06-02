@@ -13,8 +13,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!projectId) {
     return NextResponse.json(err("projectId required"), { status: 400 });
   }
-  const tasks = await listTasksByProject(projectId);
-  return NextResponse.json(ok(tasks));
+  try {
+    const tasks = await listTasksByProject(projectId);
+    return NextResponse.json(ok(tasks));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[GET /api/tasks] error:", message);
+    return NextResponse.json(err(message), { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

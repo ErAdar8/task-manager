@@ -7,11 +7,11 @@ export function db(): SupabaseClient {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !key) throw new Error("Supabase env vars not set");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const ws = typeof WebSocket === "undefined" ? require("ws") : undefined;
     _client = createClient(url, key, {
       auth: { persistSession: false },
-      ...(ws ? { realtime: { transport: ws } } : {}),
+      // Disable realtime — this app only uses REST queries, not subscriptions.
+      // Avoids WebSocket/ws issues in Node 20 serverless environments.
+      realtime: { reconnectAfterMs: () => Infinity } as never,
     });
   }
   return _client;
