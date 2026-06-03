@@ -85,8 +85,7 @@ function analysisFlowLabel(mode: Task["analysis_mode"]): string {
   if (mode === "execute") return "Understand & Execute";
   if (mode === "understand") return "Deep Understanding";
   if (mode === "testing_understand") return "Testing Mode & Understanding";
-  if (mode === "qa_kalk") return "QA Test Analysis (KALK)";
-  if (mode === "qa_general") return "QA Test Analysis (General)";
+  if (mode === "qa_general" || mode === "qa_kalk") return "QA Test Analysis";
   return "—";
 }
 
@@ -226,7 +225,6 @@ export default function TaskDetailPage() {
         | "execute"
         | "understand"
         | "testing_understand"
-        | "qa_kalk"
         | "qa_general",
       options?: { userQuestions?: string; userFocus?: string }
     ) => {
@@ -247,9 +245,7 @@ export default function TaskDetailPage() {
             ? "Running deep understanding analysis with Claude…"
             : kind === "testing_understand"
               ? "Running testing & understanding analysis with Claude…"
-              : kind === "qa_kalk"
-                ? "Running KALK QA analysis with Claude…"
-                : "Running General QA analysis with Claude…"
+              : "Running QA analysis with Claude…"
       );
       try {
         await persistDraftFields();

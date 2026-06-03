@@ -41,7 +41,7 @@ export function NewTaskModal({
   const [saving, setSaving] = useState(false);
   const [saveMode, setSaveMode] = useState<"draft" | "create">("create");
   const [analysisMode, setAnalysisMode] = useState<
-    "execute" | "understand" | "testing_understand" | "qa_kalk" | "qa_general"
+    "execute" | "understand" | "testing_understand" | "qa_general"
   >("execute");
   const [copyToast, setCopyToast] = useState(false);
   const cardImageInputRef = useRef<HTMLInputElement>(null);

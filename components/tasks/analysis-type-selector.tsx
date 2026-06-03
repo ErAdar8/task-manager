@@ -11,7 +11,7 @@ export type AnalysisTypeSelectorProps = {
   onSelectExecute: () => void | Promise<void>;
   onSelectUnderstand: (userQuestions?: string) => void | Promise<void>;
   onSelectTestingUnderstand: (userFocus?: string) => void | Promise<void>;
-  onSelectQa: (qaMode: "qa_kalk" | "qa_general", userFocus?: string) => void | Promise<void>;
+  onSelectQa: (qaMode: "qa_general", userFocus?: string) => void | Promise<void>;
   isAnalyzing: boolean;
   runningLabel?: string | null;
   /** Aborts the in-flight analysis request (client); optional so other surfaces can omit */
