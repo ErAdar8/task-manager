@@ -10,7 +10,8 @@ export function db(): SupabaseClient {
     if (!url || !key) throw new Error("Supabase env vars not set");
     _client = createClient(url, key, {
       auth: { persistSession: false },
-      realtime: { transport: ws },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      realtime: { transport: ws as any },
     });
   }
   return _client;

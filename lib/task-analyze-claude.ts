@@ -310,7 +310,6 @@ export function extractAndRepairJsonFromTextBlocks(textBlocks: string[]): JsonEx
         : "parse_failed";
 
   const preview = textBlocks.find((t) => t.trim())?.trim().slice(0, 500) ?? "";
-  // eslint-disable-next-line no-console -- debug aid for bad Claude responses
   console.error("Claude response parse failed. Preview:", preview);
 
   return {
