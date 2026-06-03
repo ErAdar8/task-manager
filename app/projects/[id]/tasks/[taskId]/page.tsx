@@ -977,7 +977,9 @@ export default function TaskDetailPage() {
                       />
                     )}
                   <AnalysisResultView task={task} projectRepoScan={projectRepoScan} />
-                  {!task.understanding ? (
+                  {/* When a canonical analysis result exists, AnalysisResultView above is the source of truth.
+                      Hide the legacy task.understanding block to avoid rendering a duplicate second section. */}
+                  {!task.understanding || (task.canonical_execute_result ?? task.canonical_understand_result ?? task.canonical_testing_result ?? task.canonical_qa_result) ? (
                     <p className="text-sm text-slate-400">
                       {task.status === "draft"
                         ? task.analysis_mode && !showDraftFlowOverride
