@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, SearchCheck } from "lucide-react";
+import { ClipboardCheck, Loader2, SearchCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils/cn";
