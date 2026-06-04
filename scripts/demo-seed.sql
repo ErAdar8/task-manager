@@ -4,12 +4,10 @@
 -- Run AFTER demo-schema.sql. Safe to re-run (truncates first).
 -- ============================================================
 
-truncate table learning_attachments cascade;
-truncate table learnings            cascade;
-truncate table task_images          cascade;
-truncate table notes                cascade;
-truncate table tasks                cascade;
-truncate table projects             cascade;
+truncate table learnings cascade;
+truncate table notes     cascade;
+truncate table tasks     cascade;
+truncate table projects  cascade;
 
 -- ════════════════════════════════════════════════════════════
 -- PROJECTS
