@@ -157,7 +157,6 @@ function asRecordArray(v: unknown): Record<string, unknown>[] {
 function formatLastAnalysisKind(kind: string | null | undefined): string {
   if (!kind) return "";
   if (kind === "testing_understand") return "testing understand";
-  if (kind === "qa_kalk") return "QA (KALK)";
   if (kind === "qa_general") return "QA (General)";
   return kind;
 }

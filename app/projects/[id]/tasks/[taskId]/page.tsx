@@ -85,7 +85,7 @@ function analysisFlowLabel(mode: Task["analysis_mode"]): string {
   if (mode === "execute") return "Understand & Execute";
   if (mode === "understand") return "Deep Understanding";
   if (mode === "testing_understand") return "Testing Mode & Understanding";
-  if (mode === "qa_general" || mode === "qa_kalk") return "QA Test Analysis";
+  if (mode === "qa_general") return "QA Test Analysis";
   return "—";
 }
 
