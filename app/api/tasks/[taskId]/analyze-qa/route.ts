@@ -10,7 +10,7 @@ type RouteParams = { params: Promise<{ taskId: string }> };
 export const maxDuration = 300;
 
 function isQaMode(m: unknown): m is QaPromptKind {
-  return m === "qa_kalk" || m === "qa_general";
+  return m === "qa_general";
 }
 
 export async function POST(
@@ -28,7 +28,7 @@ export async function POST(
     userFocus?: unknown;
   };
   if (!isQaMode(body.mode)) {
-    return NextResponse.json(err('mode must be "qa_kalk" or "qa_general" for this route'), {
+    return NextResponse.json(err('mode must be "qa_general" for this route'), {
       status: 400,
     });
   }

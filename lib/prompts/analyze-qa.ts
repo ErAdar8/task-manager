@@ -6,10 +6,9 @@ import {
   markdownPathFromRoot,
 } from "@/lib/prompts/markdown-prompt";
 
-export type QaPromptKind = "qa_kalk" | "qa_general";
+export type QaPromptKind = "qa_general";
 
 const PATHS: Record<QaPromptKind, string> = {
-  qa_kalk: markdownPathFromRoot("qa-kalk.md"),
   qa_general: markdownPathFromRoot("qa-general.md"),
 };
 

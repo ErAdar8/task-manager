@@ -116,12 +116,12 @@ export const taskSchema = z.object({
   /** Raw JSON from qa-kalk.md / qa-general.md flows (QA test analysis). */
   canonical_qa_result: z.record(z.string(), z.unknown()).nullable().default(null),
   last_analysis_kind: z
-    .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .enum(["execute", "understand", "testing_understand", "qa_general"])
     .nullable()
     .default(null),
   /** Preferred analysis flow chosen at creation (or updated on re-analyze). */
   analysis_mode: z
-    .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .enum(["execute", "understand", "testing_understand", "qa_general"])
     .nullable()
     .optional(),
   /** True when we repaired truncated JSON and produced a partial analysis result. */
@@ -138,7 +138,7 @@ export const createTaskInputSchema = z.object({
   /** Data URLs for images attached to the card description */
   card_description_images: z.array(z.string()).optional(),
   analysis_mode: z
-    .enum(["execute", "understand", "testing_understand", "qa_kalk", "qa_general"])
+    .enum(["execute", "understand", "testing_understand", "qa_general"])
     .optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;

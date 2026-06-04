@@ -63,7 +63,6 @@ export async function PATCH(
     body.analysis_mode === "execute" ||
     body.analysis_mode === "understand" ||
     body.analysis_mode === "testing_understand" ||
-    body.analysis_mode === "qa_kalk" ||
     body.analysis_mode === "qa_general"
   ) {
     updates.analysis_mode = body.analysis_mode;

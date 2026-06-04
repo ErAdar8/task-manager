@@ -2,7 +2,6 @@ export type AnalyzeMode =
   | "execute"
   | "understand"
   | "testing_understand"
-  | "qa_kalk"
   | "qa_general";
 
 const DEFAULT_EXECUTE_MODEL = "claude-opus-4-6";
@@ -18,6 +17,6 @@ export function resolveModel(mode: AnalyzeMode): string {
   const override = process.env.ANTHROPIC_MODEL_OVERRIDE?.trim();
   if (override) return override;
   if (mode === "understand") return DEFAULT_UNDERSTAND_MODEL;
-  if (mode === "qa_kalk" || mode === "qa_general") return DEFAULT_QA_MODEL;
+  if (mode === "qa_general") return DEFAULT_QA_MODEL;
   return DEFAULT_EXECUTE_MODEL;
 }
