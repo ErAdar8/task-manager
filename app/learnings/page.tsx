@@ -11,7 +11,7 @@ import { LearningModal } from "@/components/modals/learning-modal";
 import type { StandaloneLearning } from "@/schemas/learnings";
 import type { Project } from "@/schemas/projects";
 
-type Tab = "projects" | "general";
+type Tab = "projects" | "general" | "global";
 
 function ExpandableLearningGroup({
   title,
@@ -106,16 +106,16 @@ export default function LearningsPage() {
     );
   }, []);
 
-  /** General tab — flat grid of source.type === "general" learnings */
-  const filteredGeneral = useMemo(() => {
-    if (tab !== "general") return [];
+  /** Global tab — flat grid of learnings not attached to any task/project */
+  const filteredGlobal = useMemo(() => {
+    if (tab !== "global") return [];
     const q = search.trim();
     return items
       .filter((l) => l.source.type === "general")
       .filter((l) => !q || matchesSearch(l, q));
   }, [items, search, tab, matchesSearch]);
 
-  /** From Projects tab — task-attached learnings grouped by project */
+  /** From Projects tab — task-attached learnings in expandable accordion per project */
   const projectGroups = useMemo(() => {
     if (tab !== "projects") return null;
     const q = search.trim();
@@ -133,6 +133,23 @@ export default function LearningsPage() {
     tab === "projects" &&
     projectGroups != null &&
     projectGroups.every((x) => x.learnings.length === 0);
+
+  /** General tab — all task/project learnings grouped by project, all visible (no collapse) */
+  const generalGroups = useMemo(() => {
+    if (tab !== "general") return null;
+    const q = search.trim();
+    return projects
+      .map((p) => ({
+        project: p,
+        learnings: items
+          .filter((l) => l.source.projectId === p.id)
+          .filter((l) => !q || matchesSearch(l, q)),
+      }))
+      .filter((g) => g.learnings.length > 0)
+      .sort((a, b) => a.project.name.localeCompare(b.project.name, undefined, { sensitivity: "base" }));
+  }, [tab, items, projects, search, matchesSearch]);
+
+  const generalIsEmpty = tab === "general" && generalGroups != null && generalGroups.length === 0;
 
   const openCard = (l: StandaloneLearning) => {
     setActive(l);
@@ -201,6 +218,9 @@ export default function LearningsPage() {
               <Button variant={tab === "general" ? "default" : "outline"} onClick={() => setTab("general")}>
                 General
               </Button>
+              <Button variant={tab === "global" ? "default" : "outline"} onClick={() => setTab("global")}>
+                Global
+              </Button>
             </div>
             {tab === "projects" && (
               <p className="text-xs text-slate-500 pt-1">
@@ -208,6 +228,11 @@ export default function LearningsPage() {
               </p>
             )}
             {tab === "general" && (
+              <p className="text-xs text-slate-500 pt-1">
+                All project learnings displayed together, grouped by project.
+              </p>
+            )}
+            {tab === "global" && (
               <p className="text-xs text-slate-500 pt-1">
                 Standalone learnings not attached to any project or task.
               </p>
@@ -244,15 +269,46 @@ export default function LearningsPage() {
               ))}
             </div>
           )
-        ) : filteredGeneral.length === 0 ? (
+        ) : tab === "general" && generalGroups ? (
+          generalIsEmpty ? (
+            <Card className="border-slate-800 bg-slate-900/50">
+              <CardContent className="p-6 text-slate-400">
+                {search.trim() ? "No learnings match your search." : "No project learnings yet."}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-8">
+              {generalGroups.map(({ project, learnings }) => (
+                <div key={project.id} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4 text-slate-500 shrink-0" />
+                    <h2 className="text-base font-semibold text-slate-100">{project.name}</h2>
+                    <span className="text-sm text-slate-500 tabular-nums">({learnings.length})</span>
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="text-xs text-emerald-400 hover:underline ml-auto"
+                    >
+                      Open project
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {learnings.map((l) => (
+                      <LearningCard key={l.id} learning={l} onOpen={() => openCard(l)} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : filteredGlobal.length === 0 ? (
           <Card className="border-slate-800 bg-slate-900/50">
             <CardContent className="p-6 text-slate-400">
-              {search.trim() ? "No learnings match your search." : "No general learnings yet."}
+              {search.trim() ? "No learnings match your search." : "No global learnings yet."}
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredGeneral.map((l) => (
+            {filteredGlobal.map((l) => (
               <LearningCard key={l.id} learning={l} onOpen={() => openCard(l)} />
             ))}
           </div>
