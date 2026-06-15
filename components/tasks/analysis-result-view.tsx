@@ -187,7 +187,6 @@ export function AnalysisResultView({
     if (typeof id === "string" && id) topicByIdExec.set(id, tc);
   }
   const topicCardsUnd = asRecordArray(und?.topic_cards);
-  const readingOrder = Array.isArray(und?.reading_order) ? und.reading_order : [];
   const commonMistakes = asRecordArray(und?.common_mistakes);
   const keyConceptsExec = asRecordArray(exec?.key_concepts);
   const keyConceptsUnd = asRecordArray(und?.key_concepts);
