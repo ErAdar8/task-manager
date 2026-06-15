@@ -95,7 +95,7 @@ export function AnalysisTypeSelector({
             <span className="font-medium">Deep Understanding</span>
           </div>
           <p className="text-sm text-slate-400">
-            Topic cards, key concepts, reading order, and common mistakes (Sonnet).
+            Topic cards, key concepts, and common mistakes (Sonnet).
           </p>
           <div className="space-y-1.5">
             <label className="text-xs text-slate-500">What confuses you? (optional)</label>

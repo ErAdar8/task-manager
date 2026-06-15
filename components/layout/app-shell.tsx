@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <Menu className="h-6 w-6" />
         </Button>
-        <span className="ml-2 text-sm font-semibold text-slate-100">Junior Dev Task Manager</span>
+        <span className="ml-2 text-sm font-semibold text-slate-100">Task Manager</span>
       </div>
 
       {/* Mobile drawer overlay + sidebar */}

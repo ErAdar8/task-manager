@@ -899,7 +899,7 @@ export default function TaskDetailPage() {
                 ))}
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
-                {task.status !== "completed" && task.status !== "draft" && (
+                {task.status !== "draft" && (
                   <Button
                     type="button"
                     variant="outline"

@@ -452,22 +452,6 @@ export function AnalysisResultView({
               </ul>
             </div>
           )}
-          {readingOrder.length > 0 && (
-            <div>
-              <p className="text-xs text-slate-500 mb-2">Reading order</p>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-slate-200">
-                {readingOrder.map((item, i) => (
-                  <li key={`ro-${i}`}>
-                    {typeof item === "string"
-                      ? item
-                      : typeof item === "object" && item !== null
-                        ? JSON.stringify(item)
-                        : String(item)}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
           {keyConceptsUnd.length > 0 && (
             <div>
               <p className="text-xs text-slate-500 mb-2">Key concepts</p>

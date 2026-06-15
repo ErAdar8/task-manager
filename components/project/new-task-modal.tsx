@@ -276,7 +276,7 @@ export function NewTaskModal({
               >
                 <span className="text-sm font-medium text-violet-300">Deep Understanding</span>
                 <p className="text-xs text-slate-400 mt-1">
-                  Learn the domain first — concepts, reading order, pitfalls (Sonnet).
+                  Learn the domain first — concepts, pitfalls, and common mistakes (Sonnet).
                 </p>
               </button>
               <button

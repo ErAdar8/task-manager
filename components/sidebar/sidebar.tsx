@@ -84,7 +84,7 @@ export function Sidebar({
   return (
     <div className="flex flex-col h-full min-w-0 border-r border-slate-800 bg-slate-950 text-slate-100">
       <div className="flex h-12 items-center justify-between border-b border-slate-800 px-3 shrink-0">
-        <span className="text-sm font-semibold">Junior Dev Task Manager</span>
+        <span className="text-sm font-semibold">Task Manager</span>
         {onClose && (
           <Button variant="ghost" size="sm" onClick={onClose}>
             Close
