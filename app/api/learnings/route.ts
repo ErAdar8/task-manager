@@ -12,11 +12,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const source = searchParams.get("source");
   const taskId = searchParams.get("taskId");
   const projectId = searchParams.get("projectId");
+  const subtopicId = searchParams.get("subtopicId");
   let list = await listAllLearnings();
   if (source === "task") list = list.filter((l) => l.source.type === "task");
   if (source === "general") list = list.filter((l) => l.source.type === "general");
+  if (source === "subtopic") list = list.filter((l) => l.source.type === "subtopic");
   if (taskId) list = list.filter((l) => l.source.taskId === taskId);
   if (projectId) list = list.filter((l) => l.source.projectId === projectId);
+  if (subtopicId) list = list.filter((l) => l.source.subtopicId === subtopicId);
   return NextResponse.json(ok(list));
 }
 
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     content: content.trim(),
     title: typeof body.title === "string" ? body.title : undefined,
     category: typeof body.category === "string" ? body.category : undefined,
+    cardType: typeof body.cardType === "string" ? body.cardType : undefined,
     attachments:
       Array.isArray(body.attachments) && body.attachments.every((s) => typeof s === "string")
         ? (body.attachments as string[])

@@ -23,11 +23,17 @@ export function LearningCard({
   const colors = getCardColor(learning.id);
   const title = learning.title?.trim() || syntheticHeadline(learning.content);
   const preview = stripMarkdownForPreview(learning.content);
+  const cardTypeLabel =
+    learning.cardType === "flow" ? "Flow" :
+    learning.cardType === "image" ? "Image" :
+    learning.cardType === "learning" ? "Learning" : null;
   const src = learning.source;
   const sourceLine =
-    src.type === "task" && src.taskTitle
-      ? `📌 ${src.taskTitle}${src.projectName ? ` · ${src.projectName}` : ""}`
-      : "🌐 General";
+    src.type === "subtopic" && src.subtopicTitle
+      ? `📖 ${src.subtopicTitle}${src.courseName ? ` · ${src.courseName}` : ""}`
+      : src.type === "task" && src.taskTitle
+        ? `📌 ${src.taskTitle}${src.projectName ? ` · ${src.projectName}` : ""}`
+        : "🌐 General";
 
   return (
     <button
@@ -44,17 +50,24 @@ export function LearningCard({
       <div className="p-4 space-y-2">
         <h3 className={cn("font-medium line-clamp-2", colors.text)}>{title}</h3>
         <p className="text-sm text-slate-400 line-clamp-3">{preview || "—"}</p>
-        {learning.category && (
-          <span
-            className={cn(
-              "inline-block text-[10px] px-2 py-0.5 rounded border",
-              colors.border,
-              colors.accent
-            )}
-          >
-            {learning.category}
-          </span>
-        )}
+        <div className="flex flex-wrap gap-1">
+          {cardTypeLabel && (
+            <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              {cardTypeLabel}
+            </span>
+          )}
+          {learning.category && (
+            <span
+              className={cn(
+                "inline-block text-[10px] px-2 py-0.5 rounded border",
+                colors.border,
+                colors.accent
+              )}
+            >
+              {learning.category}
+            </span>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-2 text-xs text-slate-500 pt-1">
           <span className="truncate min-w-0" title={sourceLine}>
             {sourceLine}

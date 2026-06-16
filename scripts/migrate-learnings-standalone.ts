@@ -41,6 +41,7 @@ async function main(): Promise<void> {
         content: learning.content,
         title: learning.title,
         category: learning.category,
+        cardType: "note",
         attachments: learning.attachments ?? [],
         source: {
           type: "task",

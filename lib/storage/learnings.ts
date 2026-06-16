@@ -15,6 +15,7 @@ function rowToStandalone(row: Record<string, unknown>): StandaloneLearning {
     content: row.content,
     title: row.title ?? undefined,
     category: row.category ?? undefined,
+    cardType: row.card_type ?? "note",
     attachments: row.attachments ?? [],
     source: {
       type: row.source_type,
@@ -22,6 +23,10 @@ function rowToStandalone(row: Record<string, unknown>): StandaloneLearning {
       taskTitle: row.source_task_title ?? undefined,
       projectId: row.source_project_id ?? undefined,
       projectName: row.source_project_name ?? undefined,
+      subtopicId: row.source_subtopic_id ?? undefined,
+      subtopicTitle: row.source_subtopic_title ?? undefined,
+      courseId: row.source_course_id ?? undefined,
+      courseName: row.source_course_name ?? undefined,
     },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -35,12 +40,17 @@ function standaloneToRow(s: StandaloneLearning): Record<string, unknown> {
     title: s.title ?? null,
     content: s.content,
     category: s.category ?? null,
+    card_type: s.cardType ?? "note",
     attachments: s.attachments ?? [],
     source_type: s.source.type,
     source_task_id: s.source.taskId ?? null,
     source_task_title: s.source.taskTitle ?? null,
     source_project_id: s.source.projectId ?? null,
     source_project_name: s.source.projectName ?? null,
+    source_subtopic_id: s.source.subtopicId ?? null,
+    source_subtopic_title: s.source.subtopicTitle ?? null,
+    source_course_id: s.source.courseId ?? null,
+    source_course_name: s.source.courseName ?? null,
     created_at: s.createdAt,
     updated_at: s.updatedAt,
   };
@@ -107,6 +117,26 @@ export async function listGeneralLearnings(): Promise<StandaloneLearning[]> {
   return data.map((r) => rowToStandalone(r as Record<string, unknown>));
 }
 
+export async function listLearningsBySubtopic(subtopicId: string): Promise<StandaloneLearning[]> {
+  const { data, error } = await db()
+    .from("learnings")
+    .select("*")
+    .eq("source_subtopic_id", subtopicId)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToStandalone(r as Record<string, unknown>));
+}
+
+export async function listLearningsByCourse(courseId: string): Promise<StandaloneLearning[]> {
+  const { data, error } = await db()
+    .from("learnings")
+    .select("*")
+    .eq("source_course_id", courseId)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r) => rowToStandalone(r as Record<string, unknown>));
+}
+
 export async function createLearning(input: CreateStandaloneLearningInput): Promise<StandaloneLearning> {
   const now = new Date().toISOString();
   const learning: StandaloneLearning = {
@@ -114,6 +144,7 @@ export async function createLearning(input: CreateStandaloneLearningInput): Prom
     content: input.content.trim(),
     title: input.title?.trim() || undefined,
     category: input.category?.trim() || undefined,
+    cardType: input.cardType ?? "note",
     attachments: input.attachments ?? [],
     source: input.source,
     createdAt: now,
@@ -126,7 +157,7 @@ export async function createLearning(input: CreateStandaloneLearningInput): Prom
 
 export async function updateLearning(
   learningId: string,
-  updates: Partial<Pick<StandaloneLearning, "content" | "title" | "category" | "attachments" | "source">>
+  updates: Partial<Pick<StandaloneLearning, "content" | "title" | "category" | "cardType" | "attachments" | "source">>
 ): Promise<StandaloneLearning | null> {
   const current = await readLearning(learningId);
   if (!current) return null;
@@ -169,6 +200,7 @@ export async function addLearningToTask(
     content: input.content.trim(),
     title: input.title?.trim() || undefined,
     category: input.category?.trim() || undefined,
+    cardType: "note",
     attachments: input.attachments ?? [],
     source: {
       type: "task",
@@ -238,6 +270,7 @@ export async function completeTaskWithLearnings(
       id: `learn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       content: item.content.trim(),
       category: item.category?.trim() || undefined,
+      cardType: "note",
       attachments: item.attachments ?? [],
       source: {
         type: "task",

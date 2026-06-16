@@ -69,17 +69,63 @@ create table if not exists learnings (
   content              text not null,
   category             text,
   attachments          jsonb not null default '[]',
-  source_type          text not null check (source_type in ('task','general')),
+  card_type            text not null default 'note' check (card_type in ('note','learning','flow','image')),
+  source_type          text not null check (source_type in ('task','general','subtopic')),
   source_task_id       text references tasks(id)    on delete set null,
   source_task_title    text,
   source_project_id    text references projects(id) on delete set null,
   source_project_name  text,
+  source_subtopic_id   text,
+  source_subtopic_title text,
+  source_course_id     text,
+  source_course_name   text,
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now()
 );
 
 create index if not exists learnings_source_task_id_idx    on learnings(source_task_id);
 create index if not exists learnings_source_project_id_idx on learnings(source_project_id);
+create index if not exists learnings_source_subtopic_id_idx on learnings(source_subtopic_id);
+create index if not exists learnings_source_course_id_idx   on learnings(source_course_id);
+
+-- ─── courses ───────────────────────────────────────────────
+create table if not exists courses (
+  id              text primary key,
+  user_id         text not null default 'local_user',
+  name            text not null,
+  description     text,
+  total_subtopics int  not null default 0,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+-- ─── subtopics ─────────────────────────────────────────────
+create table if not exists subtopics (
+  id          text primary key,
+  course_id   text not null references courses(id) on delete cascade,
+  user_id     text not null default 'local_user',
+  title       text not null,
+  description text,
+  sort_order  int not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists subtopics_course_id_idx on subtopics(course_id);
+
+-- add FKs to learnings (after courses/subtopics exist)
+do $$ begin
+  if not exists (select 1 from information_schema.table_constraints
+                 where constraint_name = 'learnings_source_subtopic_id_fkey') then
+    alter table learnings add constraint learnings_source_subtopic_id_fkey
+      foreign key (source_subtopic_id) references subtopics(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.table_constraints
+                 where constraint_name = 'learnings_source_course_id_fkey') then
+    alter table learnings add constraint learnings_source_course_id_fkey
+      foreign key (source_course_id) references courses(id) on delete set null;
+  end if;
+end $$;
 
 -- ─── notes ──────────────────────────────────────────────────
 create table if not exists notes (
@@ -105,6 +151,8 @@ drop trigger if exists trg_projects_updated_at  on projects;
 drop trigger if exists trg_tasks_updated_at     on tasks;
 drop trigger if exists trg_learnings_updated_at on learnings;
 drop trigger if exists trg_notes_updated_at     on notes;
+drop trigger if exists trg_courses_updated_at   on courses;
+drop trigger if exists trg_subtopics_updated_at on subtopics;
 
 create trigger trg_projects_updated_at
   before update on projects for each row execute function set_updated_at();
@@ -114,3 +162,7 @@ create trigger trg_learnings_updated_at
   before update on learnings for each row execute function set_updated_at();
 create trigger trg_notes_updated_at
   before update on notes     for each row execute function set_updated_at();
+create trigger trg_courses_updated_at
+  before update on courses   for each row execute function set_updated_at();
+create trigger trg_subtopics_updated_at
+  before update on subtopics for each row execute function set_updated_at();
