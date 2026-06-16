@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { LearningCard } from "@/components/cards/learning-card";
 import { LearningModal } from "@/components/modals/learning-modal";
-import type { StandaloneLearning, CardType } from "@/schemas/learnings";
+import type { StandaloneLearning } from "@/schemas/learnings";
 
 const CARD_TYPE_LABELS: Record<string, string> = {
   note: "Notes",
