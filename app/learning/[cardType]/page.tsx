@@ -13,14 +13,22 @@ const CARD_TYPE_LABELS: Record<string, string> = {
   image: "Images",
 };
 
-type GroupedByCourse = {
+type SubtopicGroup = {
+  subtopicId: string;
+  subtopicTitle: string;
+  cards: StandaloneLearning[];
+};
+
+type TopicGroup = {
+  topicId: string;
+  topicTitle: string;
+  subtopics: SubtopicGroup[];
+};
+
+type CourseGroup = {
   courseId: string;
   courseName: string;
-  subtopics: {
-    subtopicId: string;
-    subtopicTitle: string;
-    cards: StandaloneLearning[];
-  }[];
+  topics: TopicGroup[];
 };
 
 export default function LearningBrowsePage() {
@@ -28,7 +36,7 @@ export default function LearningBrowsePage() {
   const cardType = params.cardType as string;
   const label = CARD_TYPE_LABELS[cardType] ?? cardType;
 
-  const [groups, setGroups] = useState<GroupedByCourse[]>([]);
+  const [groups, setGroups] = useState<CourseGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<StandaloneLearning | null>(null);
 
@@ -39,21 +47,38 @@ export default function LearningBrowsePage() {
       const json = (await res.json()) as { success: boolean; data?: StandaloneLearning[] };
       if (!json.success || !json.data) return;
 
-      const map = new Map<string, GroupedByCourse>();
+      const courseMap = new Map<string, CourseGroup>();
+
       for (const card of json.data) {
-        const { courseId = "", courseName = "Unknown Course", subtopicId = "", subtopicTitle = "Unknown Subtopic" } = card.source;
-        if (!map.has(courseId)) {
-          map.set(courseId, { courseId, courseName, subtopics: [] });
+        const {
+          courseId = "",
+          courseName = "Unknown Course",
+          topicId = "",
+          topicTitle = "Unknown Topic",
+          subtopicId = "",
+          subtopicTitle = "Unknown Subtopic",
+        } = card.source;
+
+        if (!courseMap.has(courseId)) {
+          courseMap.set(courseId, { courseId, courseName, topics: [] });
         }
-        const course = map.get(courseId)!;
-        let sub = course.subtopics.find((s) => s.subtopicId === subtopicId);
-        if (!sub) {
-          sub = { subtopicId, subtopicTitle, cards: [] };
-          course.subtopics.push(sub);
+        const course = courseMap.get(courseId)!;
+
+        let topicGroup = course.topics.find((t) => t.topicId === topicId);
+        if (!topicGroup) {
+          topicGroup = { topicId, topicTitle, subtopics: [] };
+          course.topics.push(topicGroup);
         }
-        sub.cards.push(card);
+
+        let subGroup = topicGroup.subtopics.find((s) => s.subtopicId === subtopicId);
+        if (!subGroup) {
+          subGroup = { subtopicId, subtopicTitle, cards: [] };
+          topicGroup.subtopics.push(subGroup);
+        }
+        subGroup.cards.push(card);
       }
-      setGroups(Array.from(map.values()));
+
+      setGroups(Array.from(courseMap.values()));
     } finally {
       setLoading(false);
     }
@@ -61,19 +86,28 @@ export default function LearningBrowsePage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const total = groups.reduce((acc, g) => acc + g.subtopics.reduce((a, s) => a + s.cards.length, 0), 0);
+  const total = groups.reduce(
+    (a, g) => a + g.topics.reduce((b, t) => b + t.subtopics.reduce((c, s) => c + s.cards.length, 0), 0),
+    0
+  );
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-100">{label}</h1>
-        {!loading && <p className="text-sm text-slate-400 mt-1">{total} card{total !== 1 ? "s" : ""} across all courses</p>}
+        {!loading && (
+          <p className="text-sm text-slate-400 mt-1">
+            {total} card{total !== 1 ? "s" : ""} across all courses
+          </p>
+        )}
       </div>
 
       {loading && <p className="text-slate-400">Loading…</p>}
 
       {!loading && groups.length === 0 && (
-        <p className="text-slate-500">No {label.toLowerCase()} yet. Create cards in a subtopic and set their type to &ldquo;{cardType}&rdquo;.</p>
+        <p className="text-slate-500">
+          No {label.toLowerCase()} yet. Create cards in a subtopic and set their type to &ldquo;{cardType}&rdquo;.
+        </p>
       )}
 
       {groups.map((course) => (
@@ -81,18 +115,21 @@ export default function LearningBrowsePage() {
           <h2 className="text-lg font-semibold text-slate-200 border-b border-slate-800 pb-2">
             {course.courseName}
           </h2>
-          {course.subtopics.map((sub) => (
-            <div key={sub.subtopicId} className="space-y-2 pl-3">
-              <h3 className="text-sm font-medium text-slate-400">{sub.subtopicTitle}</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {sub.cards.map((card) => (
-                  <LearningCard
-                    key={card.id}
-                    learning={card}
-                    onOpen={() => setSelected(card)}
-                  />
-                ))}
-              </div>
+          {course.topics.map((topic) => (
+            <div key={topic.topicId} className="space-y-3 pl-2">
+              <h3 className="text-sm font-semibold text-slate-300">{topic.topicTitle}</h3>
+              {topic.subtopics.map((sub) => (
+                <div key={sub.subtopicId} className="space-y-2 pl-3">
+                  <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    {sub.subtopicTitle}
+                  </h4>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {sub.cards.map((card) => (
+                      <LearningCard key={card.id} learning={card} onOpen={() => setSelected(card)} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>

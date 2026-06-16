@@ -75,6 +75,8 @@ create table if not exists learnings (
   source_task_title    text,
   source_project_id    text references projects(id) on delete set null,
   source_project_name  text,
+  source_topic_id      text,
+  source_topic_title   text,
   source_subtopic_id   text,
   source_subtopic_title text,
   source_course_id     text,
@@ -99,10 +101,26 @@ create table if not exists courses (
   updated_at      timestamptz not null default now()
 );
 
+-- ─── topics ────────────────────────────────────────────────
+create table if not exists topics (
+  id              text primary key,
+  course_id       text not null references courses(id) on delete cascade,
+  user_id         text not null default 'local_user',
+  title           text not null,
+  description     text,
+  sort_order      int  not null default 0,
+  total_subtopics int  not null default 0,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists topics_course_id_idx on topics(course_id);
+
 -- ─── subtopics ─────────────────────────────────────────────
 create table if not exists subtopics (
   id          text primary key,
   course_id   text not null references courses(id) on delete cascade,
+  topic_id    text references topics(id) on delete cascade,
   user_id     text not null default 'local_user',
   title       text not null,
   description text,
@@ -112,6 +130,7 @@ create table if not exists subtopics (
 );
 
 create index if not exists subtopics_course_id_idx on subtopics(course_id);
+create index if not exists subtopics_topic_id_idx  on subtopics(topic_id);
 
 -- add FKs to learnings (after courses/subtopics exist)
 do $$ begin
@@ -152,6 +171,7 @@ drop trigger if exists trg_tasks_updated_at     on tasks;
 drop trigger if exists trg_learnings_updated_at on learnings;
 drop trigger if exists trg_notes_updated_at     on notes;
 drop trigger if exists trg_courses_updated_at   on courses;
+drop trigger if exists trg_topics_updated_at    on topics;
 drop trigger if exists trg_subtopics_updated_at on subtopics;
 
 create trigger trg_projects_updated_at
@@ -164,5 +184,7 @@ create trigger trg_notes_updated_at
   before update on notes     for each row execute function set_updated_at();
 create trigger trg_courses_updated_at
   before update on courses   for each row execute function set_updated_at();
+create trigger trg_topics_updated_at
+  before update on topics    for each row execute function set_updated_at();
 create trigger trg_subtopics_updated_at
   before update on subtopics for each row execute function set_updated_at();

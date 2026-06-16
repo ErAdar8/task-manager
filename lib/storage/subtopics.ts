@@ -5,6 +5,7 @@ function rowToSubtopic(row: Record<string, unknown>): Subtopic {
   return subtopicSchema.parse({
     id: row.id,
     course_id: row.course_id,
+    topic_id: row.topic_id ?? undefined,
     user_id: row.user_id,
     title: row.title,
     description: row.description ?? undefined,
@@ -12,6 +13,16 @@ function rowToSubtopic(row: Record<string, unknown>): Subtopic {
     created_at: row.created_at,
     updated_at: row.updated_at,
   });
+}
+
+export async function listSubtopicsByTopic(topicId: string): Promise<Subtopic[]> {
+  const { data, error } = await db()
+    .from("subtopics")
+    .select("*")
+    .eq("topic_id", topicId)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return data.map((r) => rowToSubtopic(r as Record<string, unknown>));
 }
 
 export async function listSubtopicsByCourse(courseId: string): Promise<Subtopic[]> {
@@ -25,11 +36,7 @@ export async function listSubtopicsByCourse(courseId: string): Promise<Subtopic[
 }
 
 export async function getSubtopic(subtopicId: string): Promise<Subtopic | null> {
-  const { data, error } = await db()
-    .from("subtopics")
-    .select("*")
-    .eq("id", subtopicId)
-    .single();
+  const { data, error } = await db().from("subtopics").select("*").eq("id", subtopicId).single();
   if (error || !data) return null;
   return rowToSubtopic(data as Record<string, unknown>);
 }
@@ -40,6 +47,7 @@ export async function createSubtopic(input: CreateSubtopicInput): Promise<Subtop
   const row = {
     id,
     course_id: input.course_id,
+    topic_id: input.topic_id,
     user_id: input.user_id ?? "local_user",
     title: input.title,
     description: input.description ?? null,

@@ -7,13 +7,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useAppMode } from "@/lib/hooks/use-app-mode";
-import {
-  Plus,
-} from "lucide-react";
+import { Plus, ChevronRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { Project } from "@/schemas/projects";
 import type { Task } from "@/schemas/tasks";
 import type { Course } from "@/schemas/courses";
+import type { Topic } from "@/schemas/topics";
 import type { Subtopic } from "@/schemas/subtopics";
 
 function taskStatusIcon(status: Task["status"]): string {
@@ -44,54 +43,55 @@ export function Sidebar({
   // Learning mode state
   const [courses, setCourses] = useState<Course[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [subtopics, setSubtopics] = useState<Subtopic[]>([]);
 
-  // Analysis data loading
   const loadProjects = useCallback(async () => {
     const res = await fetch("/api/projects");
-    const json = (await res.json()) as { success: boolean; data?: Project[]; error?: string };
+    const json = (await res.json()) as { success: boolean; data?: Project[] };
     if (json.success && json.data) setProjects(json.data);
   }, []);
 
   const loadTasks = useCallback(async (projectId: string) => {
     const res = await fetch(`/api/tasks?projectId=${encodeURIComponent(projectId)}`);
-    const json = (await res.json()) as { success: boolean; data?: Task[]; error?: string };
+    const json = (await res.json()) as { success: boolean; data?: Task[] };
     if (json.success && json.data) setTasks(json.data);
   }, []);
 
-  // Learning data loading
   const loadCourses = useCallback(async () => {
     const res = await fetch("/api/courses");
-    const json = (await res.json()) as { success: boolean; data?: Course[]; error?: string };
+    const json = (await res.json()) as { success: boolean; data?: Course[] };
     if (json.success && json.data) setCourses(json.data);
   }, []);
 
-  const loadSubtopics = useCallback(async (courseId: string) => {
-    const res = await fetch(`/api/subtopics?courseId=${encodeURIComponent(courseId)}`);
-    const json = (await res.json()) as { success: boolean; data?: Subtopic[]; error?: string };
+  const loadTopics = useCallback(async (courseId: string) => {
+    const res = await fetch(`/api/topics?courseId=${encodeURIComponent(courseId)}`);
+    const json = (await res.json()) as { success: boolean; data?: Topic[] };
+    if (json.success && json.data) setTopics(json.data);
+  }, []);
+
+  const loadSubtopics = useCallback(async (topicId: string) => {
+    const res = await fetch(`/api/subtopics?topicId=${encodeURIComponent(topicId)}`);
+    const json = (await res.json()) as { success: boolean; data?: Subtopic[] };
     if (json.success && json.data) setSubtopics(json.data);
   }, []);
 
-  useEffect(() => {
-    setActiveProjectId(selectedProjectId);
-  }, [selectedProjectId]);
+  useEffect(() => { setActiveProjectId(selectedProjectId); }, [selectedProjectId]);
 
   useEffect(() => {
-    if (mode === "analysis") {
-      void loadProjects();
-    } else {
-      void loadCourses();
-    }
+    if (mode === "analysis") void loadProjects();
+    else void loadCourses();
   }, [mode, loadProjects, loadCourses]);
 
   useEffect(() => {
-    const refreshProjects = () => { void loadProjects(); };
-    const refreshCourses = () => { void loadCourses(); };
-    window.addEventListener("projects-updated", refreshProjects);
-    window.addEventListener("courses-updated", refreshCourses);
+    const onProjects = () => { void loadProjects(); };
+    const onCourses = () => { void loadCourses(); };
+    window.addEventListener("projects-updated", onProjects);
+    window.addEventListener("courses-updated", onCourses);
     return () => {
-      window.removeEventListener("projects-updated", refreshProjects);
-      window.removeEventListener("courses-updated", refreshCourses);
+      window.removeEventListener("projects-updated", onProjects);
+      window.removeEventListener("courses-updated", onCourses);
     };
   }, [loadProjects, loadCourses]);
 
@@ -101,14 +101,21 @@ export function Sidebar({
   }, [activeProjectId, loadTasks]);
 
   useEffect(() => {
-    if (!activeCourseId) { setSubtopics([]); return; }
-    void loadSubtopics(activeCourseId);
-  }, [activeCourseId, loadSubtopics]);
+    if (!activeCourseId) { setTopics([]); setSubtopics([]); return; }
+    void loadTopics(activeCourseId);
+  }, [activeCourseId, loadTopics]);
+
+  useEffect(() => {
+    if (!activeTopicId) { setSubtopics([]); return; }
+    void loadSubtopics(activeTopicId);
+  }, [activeTopicId, loadSubtopics]);
 
   useEffect(() => {
     if (!activeProjectId) return;
-    const exists = projects.some((project) => project.id === activeProjectId);
-    if (!exists) { setActiveProjectId(selectedProjectId); setTasks([]); }
+    if (!projects.some((p) => p.id === activeProjectId)) {
+      setActiveProjectId(selectedProjectId);
+      setTasks([]);
+    }
   }, [projects, activeProjectId, selectedProjectId]);
 
   return (
@@ -116,9 +123,7 @@ export function Sidebar({
       <div className="flex h-12 items-center justify-between border-b border-slate-800 px-3 shrink-0">
         <span className="text-sm font-semibold">Task Manager</span>
         {onClose && (
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         )}
       </div>
 
@@ -130,15 +135,9 @@ export function Sidebar({
         <>
           <div className="p-3 border-b border-slate-800">
             <div className="flex flex-col gap-1">
-              <Link href="/projects" className="text-sm text-slate-300 hover:text-white">
-                Projects
-              </Link>
-              <Link href="/notes" className="text-sm text-slate-300 hover:text-white">
-                Notes
-              </Link>
-              <Link href="/learnings" className="text-sm text-slate-300 hover:text-white">
-                Learnings
-              </Link>
+              <Link href="/projects" className="text-sm text-slate-300 hover:text-white">Projects</Link>
+              <Link href="/notes" className="text-sm text-slate-300 hover:text-white">Notes</Link>
+              <Link href="/learnings" className="text-sm text-slate-300 hover:text-white">Learnings</Link>
             </div>
           </div>
           <ScrollArea className="flex-1 p-2">
@@ -165,8 +164,7 @@ export function Sidebar({
                         View Learnings
                       </Link>
                       {tasks.map((task) => (
-                        <Link
-                          key={task.id}
+                        <Link key={task.id}
                           href={`/projects/${project.id}/tasks/${task.id}`}
                           className={cn(
                             "block text-xs truncate px-1 py-0.5 rounded",
@@ -195,51 +193,84 @@ export function Sidebar({
         <>
           <div className="p-3 border-b border-slate-800">
             <div className="flex flex-col gap-1">
-              <Link href="/courses" className="text-sm text-slate-300 hover:text-white">
-                Courses
-              </Link>
-              <Link href="/learning/notes" className="text-sm text-slate-300 hover:text-white">
-                Notes
-              </Link>
-              <Link href="/learning/learnings" className="text-sm text-slate-300 hover:text-white">
-                Learnings
-              </Link>
-              <Link href="/learning/flows" className="text-sm text-slate-300 hover:text-white">
-                Flows
-              </Link>
-              <Link href="/learning/images" className="text-sm text-slate-300 hover:text-white">
-                Images
-              </Link>
+              <Link href="/courses" className="text-sm text-slate-300 hover:text-white">Courses</Link>
+              <Link href="/learning/note" className="text-sm text-slate-300 hover:text-white">Notes</Link>
+              <Link href="/learning/learning" className="text-sm text-slate-300 hover:text-white">Learnings</Link>
+              <Link href="/learning/flow" className="text-sm text-slate-300 hover:text-white">Flows</Link>
+              <Link href="/learning/image" className="text-sm text-slate-300 hover:text-white">Images</Link>
             </div>
           </div>
           <ScrollArea className="flex-1 p-2">
-            <div className="space-y-3">
+            <div className="space-y-2">
               {courses.map((course) => (
-                <div key={course.id} className="space-y-1">
+                <div key={course.id} className="space-y-0.5">
+                  {/* Course row */}
                   <button
                     type="button"
                     className={cn(
-                      "w-full text-left px-2 py-1 rounded text-sm",
+                      "w-full text-left px-2 py-1 rounded text-sm flex items-center gap-1",
                       activeCourseId === course.id ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-800/60"
                     )}
                     onClick={() => {
-                      setActiveCourseId(course.id);
-                      router.push(`/courses/${course.id}`);
-                      onClose?.();
+                      if (activeCourseId === course.id) {
+                        setActiveCourseId(null);
+                        setActiveTopicId(null);
+                      } else {
+                        setActiveCourseId(course.id);
+                        setActiveTopicId(null);
+                        router.push(`/courses/${course.id}`);
+                        onClose?.();
+                      }
                     }}
                   >
-                    {course.name}
+                    {activeCourseId === course.id
+                      ? <ChevronDown className="h-3 w-3 shrink-0" />
+                      : <ChevronRight className="h-3 w-3 shrink-0" />}
+                    <span className="truncate">{course.name}</span>
                   </button>
+
+                  {/* Topics under this course */}
                   {activeCourseId === course.id && (
-                    <div className="pl-3 space-y-1">
-                      {subtopics.map((st) => (
-                        <Link
-                          key={st.id}
-                          href={`/courses/${course.id}/subtopics/${st.id}`}
-                          className="block text-xs truncate px-1 py-0.5 rounded text-slate-400 hover:text-slate-200"
-                        >
-                          {st.title}
-                        </Link>
+                    <div className="pl-3 space-y-0.5">
+                      {topics.map((topic) => (
+                        <div key={topic.id}>
+                          <button
+                            type="button"
+                            className={cn(
+                              "w-full text-left px-2 py-0.5 rounded text-xs flex items-center gap-1",
+                              activeTopicId === topic.id ? "text-violet-300" : "text-slate-400 hover:text-slate-200"
+                            )}
+                            onClick={() => {
+                              if (activeTopicId === topic.id) {
+                                setActiveTopicId(null);
+                              } else {
+                                setActiveTopicId(topic.id);
+                                router.push(`/courses/${course.id}/topics/${topic.id}`);
+                                onClose?.();
+                              }
+                            }}
+                          >
+                            {activeTopicId === topic.id
+                              ? <ChevronDown className="h-2.5 w-2.5 shrink-0" />
+                              : <ChevronRight className="h-2.5 w-2.5 shrink-0" />}
+                            <span className="truncate">{topic.title}</span>
+                          </button>
+
+                          {/* Subtopics under this topic */}
+                          {activeTopicId === topic.id && (
+                            <div className="pl-3 space-y-0.5 mt-0.5">
+                              {subtopics.map((st) => (
+                                <Link
+                                  key={st.id}
+                                  href={`/courses/${course.id}/topics/${topic.id}/subtopics/${st.id}`}
+                                  className="block text-xs truncate px-1 py-0.5 rounded text-slate-500 hover:text-slate-300"
+                                >
+                                  · {st.title}
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}

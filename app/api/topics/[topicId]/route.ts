@@ -1,32 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok, err } from "@/lib/api-types";
-import { getSubtopic, updateSubtopic, deleteSubtopic } from "@/lib/storage/subtopics";
-import { syncTopicSubtopicCount } from "@/lib/storage/topics";
+import { getTopic, updateTopic, deleteTopic } from "@/lib/storage/topics";
 
-type RouteParams = { params: Promise<{ id: string }> };
+type RouteParams = { params: Promise<{ topicId: string }> };
 
 export async function GET(
   _request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { id } = await params;
-  const subtopic = await getSubtopic(id);
-  if (!subtopic) return NextResponse.json(err("Subtopic not found"), { status: 404 });
-  return NextResponse.json(ok(subtopic));
+  const { topicId } = await params;
+  const topic = await getTopic(topicId);
+  if (!topic) return NextResponse.json(err("Topic not found"), { status: 404 });
+  return NextResponse.json(ok(topic));
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { id } = await params;
+  const { topicId } = await params;
   const body = (await request.json()) as Record<string, unknown>;
   const updates: Record<string, unknown> = {};
   if (typeof body.title === "string") updates.title = body.title;
   if (typeof body.description === "string") updates.description = body.description;
   if (typeof body.sort_order === "number") updates.sort_order = body.sort_order;
-  const updated = await updateSubtopic(id, updates as { title?: string; description?: string; sort_order?: number });
-  if (!updated) return NextResponse.json(err("Subtopic not found"), { status: 404 });
+  const updated = await updateTopic(topicId, updates as { title?: string; description?: string; sort_order?: number });
+  if (!updated) return NextResponse.json(err("Topic not found"), { status: 404 });
   return NextResponse.json(ok(updated));
 }
 
@@ -34,11 +33,10 @@ export async function DELETE(
   _request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { id } = await params;
-  const subtopic = await getSubtopic(id);
-  if (!subtopic) return NextResponse.json(err("Subtopic not found"), { status: 404 });
-  const deleted = await deleteSubtopic(id);
+  const { topicId } = await params;
+  const topic = await getTopic(topicId);
+  if (!topic) return NextResponse.json(err("Topic not found"), { status: 404 });
+  const deleted = await deleteTopic(topicId);
   if (!deleted) return NextResponse.json(err("Failed to delete"), { status: 500 });
-  if (subtopic.topic_id) await syncTopicSubtopicCount(subtopic.topic_id);
   return NextResponse.json(ok({ deleted: true }));
 }

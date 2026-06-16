@@ -9,6 +9,8 @@ export const learningSourceSchema = z.object({
   taskTitle: z.string().optional(),
   projectId: z.string().optional(),
   projectName: z.string().optional(),
+  topicId: z.string().optional(),
+  topicTitle: z.string().optional(),
   subtopicId: z.string().optional(),
   subtopicTitle: z.string().optional(),
   courseId: z.string().optional(),
