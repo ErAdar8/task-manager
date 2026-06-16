@@ -198,6 +198,18 @@ export function Sidebar({
               <Link href="/courses" className="text-sm text-slate-300 hover:text-white">
                 Courses
               </Link>
+              <Link href="/learning/notes" className="text-sm text-slate-300 hover:text-white">
+                Notes
+              </Link>
+              <Link href="/learning/learnings" className="text-sm text-slate-300 hover:text-white">
+                Learnings
+              </Link>
+              <Link href="/learning/flows" className="text-sm text-slate-300 hover:text-white">
+                Flows
+              </Link>
+              <Link href="/learning/images" className="text-sm text-slate-300 hover:text-white">
+                Images
+              </Link>
             </div>
           </div>
           <ScrollArea className="flex-1 p-2">

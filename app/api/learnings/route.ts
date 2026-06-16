@@ -13,6 +13,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const taskId = searchParams.get("taskId");
   const projectId = searchParams.get("projectId");
   const subtopicId = searchParams.get("subtopicId");
+  const cardType = searchParams.get("cardType");
   let list = await listAllLearnings();
   if (source === "task") list = list.filter((l) => l.source.type === "task");
   if (source === "general") list = list.filter((l) => l.source.type === "general");
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (taskId) list = list.filter((l) => l.source.taskId === taskId);
   if (projectId) list = list.filter((l) => l.source.projectId === projectId);
   if (subtopicId) list = list.filter((l) => l.source.subtopicId === subtopicId);
+  if (cardType) list = list.filter((l) => l.cardType === cardType);
   return NextResponse.json(ok(list));
 }
 

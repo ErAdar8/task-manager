@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageLightboxTrigger } from "@/components/image-lightbox-trigger";
-import type { StandaloneLearning } from "@/schemas/learnings";
+import type { StandaloneLearning, CardType } from "@/schemas/learnings";
+import { cn } from "@/lib/utils/cn";
 
 function useModalFocusTrap(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -69,6 +70,7 @@ export function LearningModal({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
+  const [cardType, setCardType] = useState<CardType>("note");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [moveLoading, setMoveLoading] = useState(false);
@@ -81,6 +83,7 @@ export function LearningModal({
     setTitle(learning.title ?? "");
     setContent(learning.content);
     setCategory(learning.category ?? "");
+    setCardType(learning.cardType ?? "note");
     setEditing(false);
     setConfirm(null);
     setTaskIdForMove("");
@@ -97,6 +100,7 @@ export function LearningModal({
           title: title.trim() || undefined,
           content: content.trim(),
           category: category.trim() || undefined,
+          cardType,
         }),
       });
       onSaved();
@@ -150,10 +154,20 @@ export function LearningModal({
   if (!open || !learning) return null;
 
   const src = learning.source;
+  const isLearningMode = src.type === "subtopic";
   const sourceLabel =
-    src.type === "task" && src.taskTitle
+    src.type === "subtopic" && src.subtopicTitle
+      ? `📖 ${src.subtopicTitle}${src.courseName ? ` · ${src.courseName}` : ""}`
+      : src.type === "task" && src.taskTitle
       ? `📌 ${src.taskTitle}${src.projectName ? ` · ${src.projectName}` : ""}`
       : "🌐 General";
+
+  const CARD_TYPES: { value: CardType; label: string }[] = [
+    { value: "note", label: "Note" },
+    { value: "learning", label: "Learning" },
+    { value: "flow", label: "Flow" },
+    { value: "image", label: "Image" },
+  ];
 
   const html = marked.parse(editing ? content : learning.content) as string;
 
@@ -212,6 +226,26 @@ export function LearningModal({
                   onChange={(e) => setCategory(e.target.value)}
                   className="mt-1 bg-slate-800 border-slate-600"
                 />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Card type</label>
+                <div className="flex gap-1">
+                  {CARD_TYPES.map((ct) => (
+                    <button
+                      key={ct.value}
+                      type="button"
+                      onClick={() => setCardType(ct.value)}
+                      className={cn(
+                        "px-2.5 py-1 rounded text-xs font-medium transition-colors",
+                        cardType === ct.value
+                          ? "bg-violet-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                      )}
+                    >
+                      {ct.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="text-xs text-slate-400">Content (markdown)</label>
@@ -304,15 +338,17 @@ export function LearningModal({
                 <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
                   Edit
                 </Button>
-                <Button type="button" variant="outline" className="border-slate-600" onClick={() => setConfirm("move_note")}>
-                  Move to Notes
-                </Button>
-                {src.type === "general" && (
+                {!isLearningMode && (
+                  <Button type="button" variant="outline" className="border-slate-600" onClick={() => setConfirm("move_note")}>
+                    Move to Notes
+                  </Button>
+                )}
+                {!isLearningMode && src.type === "general" && (
                   <Button type="button" variant="outline" className="border-slate-600" onClick={() => setConfirm("move_task")}>
                     Move to Task
                   </Button>
                 )}
-                {src.type === "task" && (
+                {!isLearningMode && src.type === "task" && (
                   <Button type="button" variant="outline" className="border-slate-600" onClick={() => setConfirm("make_general")}>
                     Make General
                   </Button>

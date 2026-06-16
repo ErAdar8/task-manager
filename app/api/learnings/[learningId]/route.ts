@@ -42,6 +42,9 @@ export async function PATCH(
   if (Array.isArray(body.attachments) && body.attachments.every((s) => typeof s === "string")) {
     updates.attachments = body.attachments as string[];
   }
+  if (typeof body.cardType === "string" && ["note", "learning", "flow", "image"].includes(body.cardType)) {
+    updates.cardType = body.cardType as "note" | "learning" | "flow" | "image";
+  }
 
   const updated = await updateLearning(learningId, updates);
   if (!updated) {
