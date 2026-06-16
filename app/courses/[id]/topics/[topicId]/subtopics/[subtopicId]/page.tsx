@@ -148,7 +148,7 @@ export default function SubtopicDetailPage() {
       const json = (await res.json()) as { success: boolean; data?: { url: string; name: string; size: number; type: string } };
       if (!json.success || !json.data) return;
 
-      const { url, name, size, type } = json.data;
+      const { url, name, size } = json.data;
       const ext = name.includes(".") ? name.split(".").pop()?.toUpperCase() : "FILE";
       await fetch("/api/learnings", {
         method: "POST",
