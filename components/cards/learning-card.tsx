@@ -1,6 +1,6 @@
 "use client";
 
-import { Paperclip } from "lucide-react";
+import { Paperclip, FileText } from "lucide-react";
 import { getCardColor } from "@/lib/card-colors";
 import { stripMarkdownForPreview } from "@/lib/strip-markdown";
 import type { StandaloneLearning } from "@/schemas/learnings";
@@ -21,12 +21,16 @@ export function LearningCard({
   className?: string;
 }) {
   const colors = getCardColor(learning.id);
+  const isFile = learning.cardType === "file";
   const title = learning.title?.trim() || syntheticHeadline(learning.content);
-  const preview = stripMarkdownForPreview(learning.content);
+  const preview = isFile ? learning.content : stripMarkdownForPreview(learning.content);
+
   const cardTypeLabel =
     learning.cardType === "flow" ? "Flow" :
     learning.cardType === "image" ? "Image" :
-    learning.cardType === "learning" ? "Learning" : null;
+    learning.cardType === "learning" ? "Learning" :
+    learning.cardType === "file" ? "File" : null;
+
   const src = learning.source;
   const sourceLine =
     src.type === "subtopic" && src.subtopicTitle
@@ -48,7 +52,10 @@ export function LearningCard({
     >
       <div className={cn("h-[3px] w-full", colors.bar)} aria-hidden />
       <div className="p-4 space-y-2">
-        <h3 className={cn("font-medium line-clamp-2", colors.text)}>{title}</h3>
+        <div className="flex items-start gap-2">
+          {isFile && <FileText className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" aria-hidden />}
+          <h3 className={cn("font-medium line-clamp-2", colors.text)}>{title}</h3>
+        </div>
         <p className="text-sm text-slate-400 line-clamp-3">{preview || "—"}</p>
         <div className="flex flex-wrap gap-1">
           {cardTypeLabel && (
@@ -57,25 +64,19 @@ export function LearningCard({
             </span>
           )}
           {learning.category && (
-            <span
-              className={cn(
-                "inline-block text-[10px] px-2 py-0.5 rounded border",
-                colors.border,
-                colors.accent
-              )}
-            >
+            <span className={cn("inline-block text-[10px] px-2 py-0.5 rounded border", colors.border, colors.accent)}>
               {learning.category}
             </span>
           )}
         </div>
         <div className="flex items-center justify-between gap-2 text-xs text-slate-500 pt-1">
-          <span className="truncate min-w-0" title={sourceLine}>
-            {sourceLine}
-          </span>
-          <span className="inline-flex items-center gap-0.5 shrink-0">
-            <Paperclip className="h-3.5 w-3.5" aria-hidden />
-            {(learning.attachments?.length ?? 0) > 0 ? learning.attachments!.length : "0"}
-          </span>
+          <span className="truncate min-w-0" title={sourceLine}>{sourceLine}</span>
+          {!isFile && (
+            <span className="inline-flex items-center gap-0.5 shrink-0">
+              <Paperclip className="h-3.5 w-3.5" aria-hidden />
+              {(learning.attachments?.length ?? 0) > 0 ? learning.attachments!.length : "0"}
+            </span>
+          )}
         </div>
       </div>
     </button>

@@ -5,6 +5,7 @@ import {
   readLearning,
   updateLearning,
 } from "@/lib/storage/learnings";
+import { learningSourceSchema } from "@/schemas/learnings";
 
 type RouteParams = { params: Promise<{ learningId: string }> };
 
@@ -42,8 +43,12 @@ export async function PATCH(
   if (Array.isArray(body.attachments) && body.attachments.every((s) => typeof s === "string")) {
     updates.attachments = body.attachments as string[];
   }
-  if (typeof body.cardType === "string" && ["note", "learning", "flow", "image"].includes(body.cardType)) {
-    updates.cardType = body.cardType as "note" | "learning" | "flow" | "image";
+  if (typeof body.cardType === "string" && ["note", "learning", "flow", "image", "file"].includes(body.cardType)) {
+    updates.cardType = body.cardType as "note" | "learning" | "flow" | "image" | "file";
+  }
+  if (body.source !== undefined) {
+    const parsed = learningSourceSchema.safeParse(body.source);
+    if (parsed.success) updates.source = parsed.data;
   }
 
   const updated = await updateLearning(learningId, updates);

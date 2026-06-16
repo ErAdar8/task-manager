@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const cardTypeEnum = z.enum(["note", "learning", "flow", "image"]);
+export const cardTypeEnum = z.enum(["note", "learning", "flow", "image", "file"]);
 export type CardType = z.infer<typeof cardTypeEnum>;
 
 export const subtopicSchema = z.object({
