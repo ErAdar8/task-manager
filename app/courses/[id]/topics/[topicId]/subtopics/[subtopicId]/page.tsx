@@ -93,6 +93,29 @@ export default function SubtopicDetailPage() {
     if (editingTitle) titleInputRef.current?.focus();
   }, [editingTitle]);
 
+  // Paste an image from the clipboard directly into the subtopic
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            void uploadFile(file);
+          }
+          break;
+        }
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtopicId, courseId, topicId, topic, subtopic, course]);
+
   const filtered = filter === "all" ? items : items.filter((l) => l.cardType === filter);
 
   const saveTitle = async () => {
@@ -148,15 +171,16 @@ export default function SubtopicDetailPage() {
       const json = (await res.json()) as { success: boolean; data?: { url: string; name: string; size: number; type: string } };
       if (!json.success || !json.data) return;
 
-      const { url, name, size } = json.data;
+      const { url, name, size, type } = json.data;
+      const isImage = type.startsWith("image/");
       const ext = name.includes(".") ? name.split(".").pop()?.toUpperCase() : "FILE";
       await fetch("/api/learnings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: `${ext} · ${formatBytes(size)}`,
+          content: isImage ? formatBytes(size) : `${ext} · ${formatBytes(size)}`,
           title: name,
-          cardType: "file",
+          cardType: isImage ? "image" : "file",
           attachments: [url],
           source: {
             type: "subtopic",

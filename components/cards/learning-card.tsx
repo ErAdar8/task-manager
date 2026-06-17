@@ -3,6 +3,7 @@
 import { Paperclip, FileText } from "lucide-react";
 import { getCardColor } from "@/lib/card-colors";
 import { stripMarkdownForPreview } from "@/lib/strip-markdown";
+import { ImageLightboxTrigger } from "@/components/image-lightbox-trigger";
 import type { StandaloneLearning } from "@/schemas/learnings";
 import { cn } from "@/lib/utils/cn";
 
@@ -22,8 +23,10 @@ export function LearningCard({
 }) {
   const colors = getCardColor(learning.id);
   const isFile = learning.cardType === "file";
+  const isImage = learning.cardType === "image";
+  const imageUrl = isImage ? learning.attachments?.[0] : undefined;
   const title = learning.title?.trim() || syntheticHeadline(learning.content);
-  const preview = isFile ? learning.content : stripMarkdownForPreview(learning.content);
+  const preview = isFile || isImage ? learning.content : stripMarkdownForPreview(learning.content);
 
   const cardTypeLabel =
     learning.cardType === "flow" ? "Flow" :
@@ -40,17 +43,37 @@ export function LearningCard({
         : "🌐 General";
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       className={cn(
-        "w-full text-left rounded-lg border overflow-hidden transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-slate-500/50",
+        "w-full text-left rounded-lg border overflow-hidden transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-slate-500/50 cursor-pointer",
         colors.bg,
         colors.border,
         className
       )}
     >
       <div className={cn("h-[3px] w-full", colors.bar)} aria-hidden />
+      {isImage && imageUrl && (
+        <div
+          className="border-b border-black/20 bg-black/20"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ImageLightboxTrigger
+            src={imageUrl}
+            alt={title}
+            className="block w-full"
+            imgClassName="w-full max-h-40 object-cover"
+          />
+        </div>
+      )}
       <div className="p-4 space-y-2">
         <div className="flex items-start gap-2">
           {isFile && <FileText className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" aria-hidden />}
@@ -71,7 +94,7 @@ export function LearningCard({
         </div>
         <div className="flex items-center justify-between gap-2 text-xs text-slate-500 pt-1">
           <span className="truncate min-w-0" title={sourceLine}>{sourceLine}</span>
-          {!isFile && (
+          {!isFile && !isImage && (
             <span className="inline-flex items-center gap-0.5 shrink-0">
               <Paperclip className="h-3.5 w-3.5" aria-hidden />
               {(learning.attachments?.length ?? 0) > 0 ? learning.attachments!.length : "0"}
@@ -79,6 +102,6 @@ export function LearningCard({
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
