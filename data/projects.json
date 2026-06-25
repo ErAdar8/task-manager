@@ -13,20 +13,50 @@
     "id": "proj_1772452916291_46kc7hr",
     "user_id": "local_user",
     "name": "chrome wallet extension",
-    "repo_scan": "",
-    "total_tasks": 9,
+    "repo_scan": "\n**REPOSITORY PURPOSE & ROLE**\n\n- This is a **Chrome extension (Manifest V3)** that implements **Unbounded Wallet** — a **Bitcoin** wallet tied to the **Nimbus** / Unbounded ecosystem. The manifest describes it as a secure Bitcoin wallet for Unbounded Wallet; `host_permissions` point at a Nimbus explorer (`explorer.nimbus.zuuts.com`) and a Bitcoin node (`node1.zuuts.com:16992`).\n- **User-facing responsibilities:** popup UI for **create/import wallet**, **unlock**, **accounts**, **send/receive**, **seed backup/reveal/confirmation**, **transaction history**, and **balance** display; **dapp-style access** via an injected page provider (`window.unbounded`) bridged through a content script to the background service worker.\n- **Technical responsibilities:** key management and vault/session handling in the **background service worker**, RPC-style methods from popup and web pages, permissions and rate limiting for untrusted origins, balance polling (alarms), and transaction construction/broadcast against the configured network/explorer.\n\n---\n\n**LANGUAGES & RUNTIME**\n\n- **Primary:** TypeScript, TSX (React), CSS.\n- **Secondary:** HTML (`popup-page.html`), JSON (manifest), JavaScript in build config (`build-config/build-extension.js`).\n- **Runtime:** **Browser** — **Chromium/Chrome extension** (MV3 service worker + extension pages + content scripts + isolated world inpage script). **Node.js ≥18** is used only for **build/CI** (`package.json` `engines`).\n\n---\n\n**FRAMEWORKS & BUILD**\n\n- **UI:** **React 18** (`react`, `react-dom`), **Tailwind CSS** 3.x with **PostCSS**/**Autoprefixer**, **shadcn-style** setup (`components.json` → Radix Select, `class-variance-authority`, `tailwind-merge`, primitives under `src/components/ui/`).\n- **Extension APIs:** `chrome.*` types (`@types/chrome`) and **`webextension-polyfill`** in `package.json` / tsconfig types (code also uses native `chrome` APIs directly in several places).\n- **Build:** **Webpack 5** with **Babel** (`babel-loader`, presets for env/React/TypeScript), **MiniCssExtractPlugin** (MV3 CSP-friendly CSS), **CopyWebpackPlugin** for `src/public` → `dist`, **ProvidePlugin** for `Buffer`/`process` browser shims.\n- **Package manager:** **npm** (`package-lock.json`). Scripts: `build`, `watch`, `type-check`, `check-format` / `fix-format` (Prettier).\n\n---\n\n**DIRECTORY & FILE STRUCTURE**\n\n- **`src/background/`** — Service worker entry (`index.ts`), **controllers** (`UnboundedController` orchestrates keyring, network, permissions, transactions), **`lib/`** (crypto, network helpers, security e.g. rate limiter).\n- **`src/content/`** — **`contentscript.ts`** (trusted bridge: `window.postMessage` ↔ extension port) and **`inpage.ts`** (MAIN world: exposes `window.unbounded` provider).\n- **`src/ui/`** — Popup React app (`index.tsx`, `App.tsx`), **screens** and **components** for wallet flows.\n- **`src/components/`** — Shared UI (e.g. `Logo.tsx`) and **`ui/`** primitives (buttons, inputs, cards — Tailwind/shadcn pattern).\n- **`src/shared/`** — **constants** (e.g. network), **utils** (validation, sanitize, user-facing messages, password rules, explorer errors).\n- **`src/types/`** — e.g. vault types.\n- **`src/lib/`** — Small shared helpers (e.g. `utils.ts` for `cn` / classnames).\n- **`src/styles/`** — Global CSS (`globals.css`).\n- **`src/public/`** — **`manifest.json`**, **`popup-page.html`**, icons, logos (copied verbatim to **`dist/`**).\n- **`build-config/`** — Webpack config for the extension bundle.\n- **Root:** `package.json`, `tsconfig.json`, `tailwind.config.js`, `postcss.config.js`, `.prettierrc`, `.gitlab-ci.yml`, `.gitignore`. **`dist/`** is the webpack output (not fully listed in the file tree snapshot but referenced by CI).\n\n---\n\n**KEY FILES & ENTRY POINTS**\n\n- **Webpack entries** (`build-config/build-extension.js`):  \n  - `background` → `src/background/index.ts` → output **`background.js`** (matches `manifest.json` `service_worker`).  \n  - `contentscript` / `inpage` → content bundles.  \n  - `popup` → `src/ui/index.tsx` → popup bundle; **`src/public/popup-page.html`** is the popup document.\n- **Routing:** No server-side router — **screen state inside `App.tsx`** drives which wallet screen is shown.\n- **“API” surface:** **Long-lived ports** — popup uses `chrome.runtime.connect({ name: 'popup' })` and `postMessage` RPCs; content script uses `name: 'unbounded-contentscript'`; background dispatches to `UnboundedController` methods (sanitized RPC-style `method`/`params`).\n\n---\n\n**DEPENDENCIES & LIBRARIES**\n\n- **Bitcoin stack:** `bitcoinjs-lib` ^6.1.6, `bip39` ^3.1.0, `bip32` ^5.0.1, `ecpair` ^2.1.0, `@bitcoinerlab/secp256k1` ^1.2.0, `@noble/hashes` ^1.4.0 — keys, addresses, transactions, hashing.\n- **Browser/node shims in bundle:** `buffer` ^6.0.3, `process` ^0.11.10 (webpack ProvidePlugin).\n- **UI:** `lucide-react` ^0.577.0, `react-qr-code` ^2.0.18, `@radix-ui/react-select` ^2.2.6, `clsx`, `class-variance-authority`, `tailwind-merge`, `tw-animate-css`.\n- **`@metamask/obs-store` ^9.0.0** — listed in `package.json` but **no imports found under `src/`** in this scan (may be unused or reserved).\n- **Notable versions:** React **^18.3.1**, TypeScript **^5.6.3**, Webpack **^5.96.1**, extension **0.1.0** (manifest and package).\n\n---\n\n**PATTERNS**\n\n- **Organization:** **Layered by extension concern** — background (policy + crypto + network), content (bridge + injection), UI (React screens), shared utilities and types. **Controllers** split **Keyring**, **Network**, **Transaction**, **Permission**, orchestrated by **`UnboundedController`**.\n- **Data flow:**  \n  - **Popup ↔ background:** port-based RPC with numeric ids and async results; optional push messages (e.g. balance updates as `CustomEvent` / port messages).  \n  - **Web page ↔ extension:** `postMessage` between page and content script; content script forwards over a port to background with **origin checks** and **rate limiting** for untrusted connections; **inpage** script exposes a minimal **`request`-style** provider on `window.unbounded`.\n- **Security-related patterns:** CSP in manifest for extension pages; sanitize/validate shared helpers; separate **trusted** (popup) vs **untrusted** (content) port handling in `background/index.ts`; alarms for **auto-lock** and **balance polling**.\n\n---\n\n**Note:** The workspace folder is named **`nimbus-wallet-extension`** while **`package.json`** names the package **`unbounded-wallet-extension`** — same product branding as the manifest (“Unbounded Wallet”).",
+    "total_tasks": 32,
     "completed_tasks": 3,
     "created_at": "2026-03-02T12:01:56.291Z",
-    "updated_at": "2026-03-17T12:03:48.503Z"
+    "updated_at": "2026-05-14T16:01:48.113Z"
   },
   {
     "id": "proj_1773770384537_ereescd",
     "user_id": "local_user",
     "name": "EOA Wallet",
     "repo_scan": "",
-    "total_tasks": 2,
-    "completed_tasks": 0,
+    "total_tasks": 3,
+    "completed_tasks": 1,
     "created_at": "2026-03-17T17:59:44.537Z",
-    "updated_at": "2026-03-21T22:01:29.217Z"
+    "updated_at": "2026-03-26T15:44:22.566Z"
+  },
+  {
+    "id": "proj_1774539898306_zogahch",
+    "user_id": "local_user",
+    "name": "kalk",
+    "repo_scan": "",
+    "total_tasks": 4,
+    "completed_tasks": 0,
+    "created_at": "2026-03-26T15:44:58.306Z",
+    "updated_at": "2026-03-30T12:22:06.416Z"
+  },
+  {
+    "id": "proj_1774948655848_1zja2ma",
+    "user_id": "local_user",
+    "name": "Klak Q/A",
+    "repo_scan": "",
+    "total_tasks": 9,
+    "completed_tasks": 0,
+    "created_at": "2026-03-31T09:17:35.848Z",
+    "updated_at": "2026-04-03T17:27:46.174Z"
+  },
+  {
+    "id": "proj_1775914619884_1v7t7rd",
+    "user_id": "local_user",
+    "name": "task helper",
+    "repo_scan": "",
+    "total_tasks": 3,
+    "completed_tasks": 0,
+    "created_at": "2026-04-11T13:36:59.884Z",
+    "updated_at": "2026-04-28T15:49:22.604Z"
   }
 ]
