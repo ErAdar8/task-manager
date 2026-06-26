@@ -1,6 +1,7 @@
 "use client";
 
-import { ImageIcon } from "lucide-react";
+import { useState } from "react";
+import { ImageIcon, Copy, Check } from "lucide-react";
 import { getCardColor } from "@/lib/card-colors";
 import { stripMarkdownForPreview } from "@/lib/strip-markdown";
 import type { GenericNote } from "@/schemas/notes";
@@ -20,20 +21,41 @@ export function NoteCard({
   const colors = getCardColor(note.id);
   const preview = stripMarkdownForPreview(note.content);
   const tags = note.tags ?? [];
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    void navigator.clipboard.writeText(note.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
       className={cn(
-        "w-full text-left rounded-lg border overflow-hidden transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-slate-500/50",
+        "w-full text-left rounded-lg border overflow-hidden transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-slate-500/50 cursor-pointer group",
         colors.bg,
         colors.border
       )}
     >
       <div className={cn("h-[3px] w-full", colors.bar)} aria-hidden />
       <div className="p-4 space-y-2">
-        <h3 className={cn("font-medium line-clamp-2", colors.text)}>{note.title}</h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className={cn("font-medium line-clamp-2 flex-1 min-w-0", colors.text)}>{note.title}</h3>
+          <button
+            type="button"
+            onClick={handleCopy}
+            title="Copy content"
+            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 rounded p-1 text-slate-500 hover:text-slate-200 hover:bg-slate-700/50"
+          >
+            {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        </div>
         <p className="text-sm text-slate-400 line-clamp-3">{preview || "—"}</p>
         <div className="flex flex-wrap gap-1.5 items-center justify-between gap-y-2">
           <div className="flex flex-wrap gap-1.5 min-w-0">
@@ -65,6 +87,6 @@ export function NoteCard({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
